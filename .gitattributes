@@ -1,0 +1,2 @@
+*.onnx filter=lfs diff=lfs merge=lfs -text
+resources/kokoro/af_heart.bin filter=lfs diff=lfs merge=lfs -text
