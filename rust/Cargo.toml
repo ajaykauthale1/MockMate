@@ -6,6 +6,7 @@ members = [
     "mockmate-llm",
     "mockmate-viseme",
     "mockmate-session",
+    "mockmate-bridge",
 ]
 resolver = "2"
 

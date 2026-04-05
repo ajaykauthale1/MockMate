@@ -1198,6 +1198,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mockmate-bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "flutter_rust_bridge",
+ "mockmate-core",
+ "mockmate-llm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mockmate-core"
 version = "0.1.0"
 dependencies = [
