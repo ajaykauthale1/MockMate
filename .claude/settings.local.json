@@ -12,7 +12,21 @@
       "Bash(git add:*)",
       "Bash(git restore:*)",
       "Bash(cargo test:*)",
-      "Bash(flutter test:*)"
+      "Bash(flutter test:*)",
+      "Bash(cargo build:*)",
+      "Bash(flutter pub:*)",
+      "Bash(dart pub:*)",
+      "Bash(flutter_rust_bridge generate:*)",
+      "Read(//c/Users/Ajay/AppData/Local/Pub/Cache/bin//**)",
+      "Read(//c/Users/Ajay/.pub-cache/**)",
+      "Bash(dart /c/Users/Ajay/AppData/Local/Pub/Cache/global_packages/flutter_rust_bridge/bin/flutter_rust_bridge.dart-3.11.0-200.1.beta.snapshot generate)",
+      "Bash(cargo install:*)",
+      "Bash(flutter_rust_bridge_codegen generate:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(git merge phase/1-sidecar --no-ff -m ':*)",
+      "Bash(cargo doc:*)",
+      "Bash(grep -r \"pub use\\\\|pub struct Session\\\\|pub fn builder\" /c/workspaces/MockMate/rust/target/.cargo-lock/../../../.cargo/registry/src/*/ort-2.0.0-rc.12/src/lib.rs)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
