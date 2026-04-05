@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 835108627;
+  int get rustContentHash => 1078098342;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,13 +78,38 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 abstract class RustLibApi extends BaseApi {
   Future<String> crateBridgeChat({required String userMessage});
 
+  Future<String> crateBridgeExtractVisemes({required List<int> pcmBytes});
+
+  Future<bool> crateBridgeInitElevenlabsTts({
+    required String apiKey,
+    required String voiceId,
+  });
+
+  Future<bool> crateBridgeInitPiperTts({
+    required String piperBin,
+    required String modelPath,
+  });
+
+  Future<bool> crateBridgeInitSileroVad({required String modelPath});
+
+  Future<bool> crateBridgeInitWhisperStt({
+    required String whisperBin,
+    required String modelPath,
+  });
+
   Future<void> crateBridgeLoadKnowledgeBase({required String text});
 
   Future<bool> crateBridgeOllamaHealthCheck();
 
   Future<List<String>> crateBridgeOllamaPullModel();
 
+  Future<String> crateBridgeProcessAudioTurn({required List<int> pcmBytes});
+
   Future<void> crateBridgeSetInteractionMode({required bool isTest});
+
+  Future<Uint8List> crateBridgeSynthesiseText({required String text});
+
+  Future<String> crateBridgeTranscribeAudio({required List<int> pcmBytes});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -124,6 +149,167 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "chat", argNames: ["userMessage"]);
 
   @override
+  Future<String> crateBridgeExtractVisemes({required List<int> pcmBytes}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(pcmBytes, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeExtractVisemesConstMeta,
+        argValues: [pcmBytes],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeExtractVisemesConstMeta =>
+      const TaskConstMeta(debugName: "extract_visemes", argNames: ["pcmBytes"]);
+
+  @override
+  Future<bool> crateBridgeInitElevenlabsTts({
+    required String apiKey,
+    required String voiceId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(apiKey, serializer);
+          sse_encode_String(voiceId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitElevenlabsTtsConstMeta,
+        argValues: [apiKey, voiceId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitElevenlabsTtsConstMeta =>
+      const TaskConstMeta(
+        debugName: "init_elevenlabs_tts",
+        argNames: ["apiKey", "voiceId"],
+      );
+
+  @override
+  Future<bool> crateBridgeInitPiperTts({
+    required String piperBin,
+    required String modelPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(piperBin, serializer);
+          sse_encode_String(modelPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitPiperTtsConstMeta,
+        argValues: [piperBin, modelPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitPiperTtsConstMeta => const TaskConstMeta(
+    debugName: "init_piper_tts",
+    argNames: ["piperBin", "modelPath"],
+  );
+
+  @override
+  Future<bool> crateBridgeInitSileroVad({required String modelPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modelPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitSileroVadConstMeta,
+        argValues: [modelPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitSileroVadConstMeta => const TaskConstMeta(
+    debugName: "init_silero_vad",
+    argNames: ["modelPath"],
+  );
+
+  @override
+  Future<bool> crateBridgeInitWhisperStt({
+    required String whisperBin,
+    required String modelPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(whisperBin, serializer);
+          sse_encode_String(modelPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitWhisperSttConstMeta,
+        argValues: [whisperBin, modelPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitWhisperSttConstMeta => const TaskConstMeta(
+    debugName: "init_whisper_stt",
+    argNames: ["whisperBin", "modelPath"],
+  );
+
+  @override
   Future<void> crateBridgeLoadKnowledgeBase({required String text}) {
     return handler.executeNormal(
       NormalTask(
@@ -133,7 +319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 7,
             port: port_,
           );
         },
@@ -160,7 +346,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 8,
             port: port_,
           );
         },
@@ -187,7 +373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 9,
             port: port_,
           );
         },
@@ -206,6 +392,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "ollama_pull_model", argNames: []);
 
   @override
+  Future<String> crateBridgeProcessAudioTurn({required List<int> pcmBytes}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(pcmBytes, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeProcessAudioTurnConstMeta,
+        argValues: [pcmBytes],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeProcessAudioTurnConstMeta =>
+      const TaskConstMeta(
+        debugName: "process_audio_turn",
+        argNames: ["pcmBytes"],
+      );
+
+  @override
   Future<void> crateBridgeSetInteractionMode({required bool isTest}) {
     return handler.executeNormal(
       NormalTask(
@@ -215,7 +432,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 11,
             port: port_,
           );
         },
@@ -236,6 +453,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["isTest"],
       );
 
+  @override
+  Future<Uint8List> crateBridgeSynthesiseText({required String text}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(text, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeSynthesiseTextConstMeta,
+        argValues: [text],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeSynthesiseTextConstMeta =>
+      const TaskConstMeta(debugName: "synthesise_text", argNames: ["text"]);
+
+  @override
+  Future<String> crateBridgeTranscribeAudio({required List<int> pcmBytes}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(pcmBytes, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeTranscribeAudioConstMeta,
+        argValues: [pcmBytes],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeTranscribeAudioConstMeta => const TaskConstMeta(
+    debugName: "transcribe_audio",
+    argNames: ["pcmBytes"],
+  );
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -252,6 +527,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
   }
 
   @protected
@@ -298,6 +579,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -340,6 +628,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_String(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(
+      self is Uint8List ? self : Uint8List.fromList(self),
+    );
   }
 
   @protected

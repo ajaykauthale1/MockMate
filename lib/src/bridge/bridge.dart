@@ -9,7 +9,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `state`
 
 /// Load (or replace) the knowledge base text in Rust AppState.
-/// Flutter reads assets/kb/*.txt and passes the concatenated content here.
 Future<void> loadKnowledgeBase({required String text}) =>
     RustLib.instance.api.crateBridgeLoadKnowledgeBase(text: text);
 
@@ -22,13 +21,62 @@ Future<bool> ollamaHealthCheck() =>
     RustLib.instance.api.crateBridgeOllamaHealthCheck();
 
 /// Send a user message and get the full LLM response using the current KB + mode.
-/// Builds the system prompt from AppState (KB + InteractionMode) then calls Ollama.
-/// Returns the concatenated response string, or an error message prefixed with "error:".
 Future<String> chat({required String userMessage}) =>
     RustLib.instance.api.crateBridgeChat(userMessage: userMessage);
 
-/// Pull the default model from Ollama. Streams status strings back to Flutter.
-/// Returns each status line; Flutter polls until "success" or an error.
-/// For simplicity in Phase 1, this collects all status lines and returns them.
+/// Pull the default Ollama model, returning all status lines.
 Future<List<String>> ollamaPullModel() =>
     RustLib.instance.api.crateBridgeOllamaPullModel();
+
+/// Initialise the Whisper STT provider.
+/// `whisper_bin` = path to whisper-cli executable; `model_path` = GGML model.
+/// Returns `true` on success, `false` if either path is invalid.
+Future<bool> initWhisperStt({
+  required String whisperBin,
+  required String modelPath,
+}) => RustLib.instance.api.crateBridgeInitWhisperStt(
+  whisperBin: whisperBin,
+  modelPath: modelPath,
+);
+
+/// Initialise the Silero VAD provider.
+/// Returns `true` on success.
+Future<bool> initSileroVad({required String modelPath}) =>
+    RustLib.instance.api.crateBridgeInitSileroVad(modelPath: modelPath);
+
+/// Initialise Piper TTS.
+/// `piper_bin` = path to the piper executable; `model_path` = ONNX model.
+Future<bool> initPiperTts({
+  required String piperBin,
+  required String modelPath,
+}) => RustLib.instance.api.crateBridgeInitPiperTts(
+  piperBin: piperBin,
+  modelPath: modelPath,
+);
+
+/// Initialise ElevenLabs TTS (BYOK).
+Future<bool> initElevenlabsTts({
+  required String apiKey,
+  required String voiceId,
+}) => RustLib.instance.api.crateBridgeInitElevenlabsTts(
+  apiKey: apiKey,
+  voiceId: voiceId,
+);
+
+/// Transcribe f32 LE PCM bytes (16 kHz mono) to text.
+Future<String> transcribeAudio({required List<int> pcmBytes}) =>
+    RustLib.instance.api.crateBridgeTranscribeAudio(pcmBytes: pcmBytes);
+
+/// Synthesise text to f32 LE PCM bytes using the current TTS provider.
+Future<Uint8List> synthesiseText({required String text}) =>
+    RustLib.instance.api.crateBridgeSynthesiseText(text: text);
+
+/// Extract viseme frames from f32 LE PCM bytes.
+/// Returns JSON-serialised `Vec<Viseme>`, or `"[]"` on error.
+Future<String> extractVisemes({required List<int> pcmBytes}) =>
+    RustLib.instance.api.crateBridgeExtractVisemes(pcmBytes: pcmBytes);
+
+/// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
+/// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
+Future<String> processAudioTurn({required List<int> pcmBytes}) =>
+    RustLib.instance.api.crateBridgeProcessAudioTurn(pcmBytes: pcmBytes);
