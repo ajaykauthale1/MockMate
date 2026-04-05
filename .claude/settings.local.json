@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git rm:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(flutter --version)",
+      "Bash(cargo --version)",
+      "Bash(rustc --version)",
+      "Bash(export PATH=\"$PATH:/c/Users/Ajay/.cargo/bin\")",
+      "Bash(flutter create:*)",
+      "Bash(git add:*)",
+      "Bash(git restore:*)",
+      "Bash(cargo test:*)",
+      "Bash(flutter test:*)"
+    ]
+  }
+}
