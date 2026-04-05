@@ -1,26 +1,27 @@
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use mockmate_core::{prompt::build_system_prompt, providers::InteractionMode, state::AppState};
 use mockmate_llm::OllamaLlm;
+use mockmate_viseme::FftVisemeExtractor;
 
 // ---------------------------------------------------------------------------
-// Global state — lazily initialised on first bridge call.
-// Providers not yet implemented (audio/STT/TTS) use no-op stubs.
+// Global state — Arc<AppState> so it can be cheaply shared with SessionManager.
+// STT and VAD start as no-op stubs; Flutter calls init_* to upgrade them.
+// TTS starts as a stub; init_piper_tts / init_elevenlabs_tts upgrades it.
+// Viseme uses FftVisemeExtractor immediately (no model needed).
 // ---------------------------------------------------------------------------
 
-static APP_STATE: OnceLock<AppState> = OnceLock::new();
+static APP_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
-fn state() -> &'static AppState {
+fn state() -> &'static Arc<AppState> {
     APP_STATE.get_or_init(|| {
-        use std::sync::Arc;
         use anyhow::Result;
         use async_trait::async_trait;
-        use mockmate_core::providers::{TtsProvider, SttProvider, VadProvider, VisemeExtractor, Viseme};
+        use mockmate_core::providers::{SttProvider, TtsProvider, VadProvider};
 
         struct StubTts;
         struct StubStt;
         struct StubVad;
-        struct StubViseme;
 
         #[async_trait]
         impl TtsProvider for StubTts {
@@ -34,27 +35,22 @@ fn state() -> &'static AppState {
         impl VadProvider for StubVad {
             async fn is_speech(&self, _: &[f32]) -> Result<bool> { Ok(false) }
         }
-        #[async_trait]
-        impl VisemeExtractor for StubViseme {
-            async fn extract(&self, _: &[u8]) -> Result<Vec<Viseme>> { Ok(vec![]) }
-        }
 
-        AppState::new(
+        Arc::new(AppState::new(
             Arc::new(OllamaLlm::new(None, None)),
             Arc::new(StubStt),
             Arc::new(StubTts),
             Arc::new(StubVad),
-            Arc::new(StubViseme),
-        )
+            Arc::new(FftVisemeExtractor::new(16_000)),
+        ))
     })
 }
 
 // ---------------------------------------------------------------------------
-// FRB-exposed functions
+// Phase 2 bridge functions
 // ---------------------------------------------------------------------------
 
 /// Load (or replace) the knowledge base text in Rust AppState.
-/// Flutter reads assets/kb/*.txt and passes the concatenated content here.
 pub async fn load_knowledge_base(text: String) {
     state().set_knowledge_base(text).await;
 }
@@ -67,20 +63,17 @@ pub async fn set_interaction_mode(is_test: bool) {
 
 /// Check whether Ollama is running and the default model is available.
 pub async fn ollama_health_check() -> bool {
-    let llm = OllamaLlm::new(None, None);
-    llm.health_check().await.unwrap_or(false)
+    OllamaLlm::new(None, None).health_check().await.unwrap_or(false)
 }
 
 /// Send a user message and get the full LLM response using the current KB + mode.
-/// Builds the system prompt from AppState (KB + InteractionMode) then calls Ollama.
-/// Returns the concatenated response string, or an error message prefixed with "error:".
 pub async fn chat(user_message: String) -> String {
     let s = state();
     let kb = s.knowledge_base.lock().await.clone();
     let mode = *s.mode.lock().await;
     let system = build_system_prompt(mode, &kb);
 
-    match s.llm.chat(&system, &user_message).await {
+    match s.llm.read().await.chat(&system, &user_message).await {
         Err(e) => format!("error: {e}"),
         Ok(mut rx) => {
             let mut response = String::new();
@@ -98,9 +91,7 @@ pub async fn chat(user_message: String) -> String {
     }
 }
 
-/// Pull the default model from Ollama. Streams status strings back to Flutter.
-/// Returns each status line; Flutter polls until "success" or an error.
-/// For simplicity in Phase 1, this collects all status lines and returns them.
+/// Pull the default Ollama model, returning all status lines.
 pub async fn ollama_pull_model() -> Vec<String> {
     let llm = OllamaLlm::new(None, None);
     match llm.pull_model().await {
@@ -118,5 +109,93 @@ pub async fn ollama_pull_model() -> Vec<String> {
             }
             statuses
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — provider initialisation
+// ---------------------------------------------------------------------------
+
+/// Initialise the Whisper STT provider.
+/// `whisper_bin` = path to whisper-cli executable; `model_path` = GGML model.
+/// Returns `true` on success, `false` if either path is invalid.
+pub async fn init_whisper_stt(whisper_bin: String, model_path: String) -> bool {
+    match mockmate_audio::WhisperStt::new(&whisper_bin, &model_path) {
+        Ok(stt) => { state().set_stt(Arc::new(stt)).await; true }
+        Err(e) => { tracing::error!("init_whisper_stt: {e}"); false }
+    }
+}
+
+/// Initialise the Silero VAD provider.
+/// Returns `true` on success.
+pub async fn init_silero_vad(model_path: String) -> bool {
+    match mockmate_audio::SileroVad::new(&model_path) {
+        Ok(vad) => { state().set_vad(Arc::new(vad)).await; true }
+        Err(e) => { tracing::error!("init_silero_vad: {e}"); false }
+    }
+}
+
+/// Initialise Piper TTS.
+/// `piper_bin` = path to the piper executable; `model_path` = ONNX model.
+pub async fn init_piper_tts(piper_bin: String, model_path: String) -> bool {
+    state().set_tts(Arc::new(mockmate_tts::PiperTts::new(piper_bin, model_path))).await;
+    true
+}
+
+/// Initialise ElevenLabs TTS (BYOK).
+pub async fn init_elevenlabs_tts(api_key: String, voice_id: String) -> bool {
+    state().set_tts(Arc::new(mockmate_tts::ElevenLabsTts::new(api_key, voice_id))).await;
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — audio pipeline bridge functions
+// ---------------------------------------------------------------------------
+
+/// Transcribe f32 LE PCM bytes (16 kHz mono) to text.
+pub async fn transcribe_audio(pcm_bytes: Vec<u8>) -> String {
+    match state().stt.read().await.transcribe(&pcm_bytes).await {
+        Ok(text) => text,
+        Err(e) => format!("error: {e}"),
+    }
+}
+
+/// Synthesise text to f32 LE PCM bytes using the current TTS provider.
+pub async fn synthesise_text(text: String) -> Vec<u8> {
+    state().tts.read().await.synthesise(&text).await.unwrap_or_default()
+}
+
+/// Extract viseme frames from f32 LE PCM bytes.
+/// Returns JSON-serialised `Vec<Viseme>`, or `"[]"` on error.
+pub async fn extract_visemes(pcm_bytes: Vec<u8>) -> String {
+    match state().viseme.read().await.extract(&pcm_bytes).await {
+        Ok(v) => serde_json::to_string(&v).unwrap_or_else(|_| "[]".to_string()),
+        Err(e) => { tracing::error!("extract_visemes: {e}"); "[]".to_string() }
+    }
+}
+
+/// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
+/// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
+pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
+    use mockmate_session::SessionManager;
+
+    let samples: Vec<f32> = pcm_bytes
+        .chunks_exact(4)
+        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+
+    let mgr = SessionManager::new(Arc::clone(state()));
+    match mgr.process_audio(&samples).await {
+        Ok(r) => {
+            let visemes_json =
+                serde_json::to_string(&r.visemes).unwrap_or_else(|_| "[]".to_string());
+            serde_json::json!({
+                "transcript": r.transcript,
+                "response":   r.response_text,
+                "visemes":    visemes_json,
+            })
+            .to_string()
+        }
+        Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
     }
 }
