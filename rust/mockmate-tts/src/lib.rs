@@ -1,2 +1,5 @@
-// mockmate-tts: TtsProvider implementations (Piper, Kokoro, ElevenLabs BYOK).
-// Implementation added in Phase 3.
+pub mod piper;
+pub mod elevenlabs;
+
+pub use piper::PiperTts;
+pub use elevenlabs::ElevenLabsTts;
