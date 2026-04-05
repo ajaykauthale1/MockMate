@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../audio/audio_provider.dart';
 import '../bridge/bridge.dart' as bridge;
 
 // ---------------------------------------------------------------------------
@@ -29,8 +30,11 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
   Future<void> send(String userText) async {
     final current = state.valueOrNull ?? [];
-    state = AsyncData([...current, ChatMessage(role: MessageRole.user, text: userText)]);
+    state = AsyncData(
+        [...current, ChatMessage(role: MessageRole.user, text: userText)]);
     state = const AsyncLoading<List<ChatMessage>>().copyWithPrevious(state);
+
+    ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
     final response = await bridge.chat(userMessage: userText);
     final updated = state.valueOrNull ?? [];
@@ -38,11 +42,23 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
       ...updated,
       ChatMessage(role: MessageRole.assistant, text: response),
     ]);
+
+    // Synthesise speech and extract visemes for avatar animation.
+    // Stub TTS returns empty bytes → visemes will be "[]" → avatar stays closed.
+    // Real animation kicks in once Piper/ElevenLabs is initialised.
+    final pcm = await bridge.synthesiseText(text: response);
+    final visemesJson =
+        await bridge.extractVisemes(pcmBytes: pcm.toList());
+    ref.read(pendingVisemesProvider.notifier).state = visemesJson;
+
+    // If no visemes (stub TTS), go idle immediately.
+    if (visemesJson == '[]') {
+      ref.read(audioStateProvider.notifier).state = AudioState.idle;
+    }
   }
 
   Future<void> switchMode(bool isTest) async {
     await bridge.setInteractionMode(isTest: isTest);
-    // Wipe conversation history — new mode, fresh context.
     state = const AsyncData([]);
   }
 }

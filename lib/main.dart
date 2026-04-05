@@ -4,6 +4,7 @@ import 'src/bridge/frb_generated.dart';
 import 'src/chat/chat_page.dart';
 import 'src/onboarding/onboarding_page.dart';
 import 'src/services/kb_service.dart';
+import 'src/theme/ske_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,10 +20,7 @@ class MockMateApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'MockMate',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      theme: skeuomorphicTheme(),
       home: const OnboardingPage(nextPage: ChatPage()),
     );
   }
