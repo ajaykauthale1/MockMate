@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use mockmate_core::{providers::InteractionMode, state::AppState};
+use mockmate_core::{prompt::build_system_prompt, providers::InteractionMode, state::AppState};
 use mockmate_llm::OllamaLlm;
 
 // ---------------------------------------------------------------------------
@@ -69,6 +69,33 @@ pub async fn set_interaction_mode(is_test: bool) {
 pub async fn ollama_health_check() -> bool {
     let llm = OllamaLlm::new(None, None);
     llm.health_check().await.unwrap_or(false)
+}
+
+/// Send a user message and get the full LLM response using the current KB + mode.
+/// Builds the system prompt from AppState (KB + InteractionMode) then calls Ollama.
+/// Returns the concatenated response string, or an error message prefixed with "error:".
+pub async fn chat(user_message: String) -> String {
+    let s = state();
+    let kb = s.knowledge_base.lock().await.clone();
+    let mode = *s.mode.lock().await;
+    let system = build_system_prompt(mode, &kb);
+
+    match s.llm.chat(&system, &user_message).await {
+        Err(e) => format!("error: {e}"),
+        Ok(mut rx) => {
+            let mut response = String::new();
+            while let Some(result) = rx.recv().await {
+                match result {
+                    Ok(token) => response.push_str(&token),
+                    Err(e) => {
+                        response.push_str(&format!("\nerror: {e}"));
+                        break;
+                    }
+                }
+            }
+            response
+        }
+    }
 }
 
 /// Pull the default model from Ollama. Streams status strings back to Flutter.
