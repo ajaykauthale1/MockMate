@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/bridge/frb_generated.dart';
+import 'src/chat/chat_page.dart';
 import 'src/onboarding/onboarding_page.dart';
 import 'src/services/kb_service.dart';
 
@@ -22,18 +23,7 @@ class MockMateApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: OnboardingPage(nextPage: const _PlaceholderHome()),
-    );
-  }
-}
-
-class _PlaceholderHome extends StatelessWidget {
-  const _PlaceholderHome();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('MockMate — Phase 1')),
+      home: const OnboardingPage(nextPage: ChatPage()),
     );
   }
 }
