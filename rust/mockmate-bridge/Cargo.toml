@@ -14,6 +14,10 @@ tracing = { workspace = true }
 flutter_rust_bridge = "=2.12.0"
 mockmate-core = { path = "../mockmate-core" }
 mockmate-llm = { path = "../mockmate-llm" }
+mockmate-audio = { path = "../mockmate-audio" }
+mockmate-tts = { path = "../mockmate-tts" }
+mockmate-viseme = { path = "../mockmate-viseme" }
+mockmate-session = { path = "../mockmate-session" }
 
 [lib]
 name = "mockmate_bridge"

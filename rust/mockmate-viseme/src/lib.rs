@@ -1,2 +1,3 @@
-// mockmate-viseme: VisemeExtractor implementations (FFT fallback, Piper phoneme).
-// Implementation added in Phase 3.
+pub mod fft;
+
+pub use fft::FftVisemeExtractor;
