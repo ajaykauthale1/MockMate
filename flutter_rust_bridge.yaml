@@ -1,0 +1,3 @@
+rust_input: rust/mockmate-core/src/bridge.rs
+dart_output: lib/src/bridge/
+rust_root: rust/mockmate-core

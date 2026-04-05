@@ -1,1 +1,23 @@
+# Docs (local only)
 /docs/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.g.dart
+
+# Rust
+rust/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
