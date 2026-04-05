@@ -1,0 +1,12 @@
+MockMate Knowledge Base — Sample
+
+== Rust Ownership ==
+Every value in Rust has a single owner. When the owner goes out of scope, the value is dropped.
+You can borrow a value immutably (&T) many times, or mutably (&mut T) exactly once at a time.
+Borrowing rules are enforced at compile time by the borrow checker.
+
+== Common Interview Topics ==
+- Explain the difference between Stack and Heap memory.
+- What is a mutex and when would you use one?
+- Describe the CAP theorem.
+- What is the difference between concurrency and parallelism?

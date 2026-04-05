@@ -1,0 +1,213 @@
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use futures_util::StreamExt;
+use mockmate_core::providers::LlmProvider;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use tracing::debug;
+
+const DEFAULT_BASE_URL: &str = "http://127.0.0.1:11434";
+const DEFAULT_MODEL: &str = "qwen2.5:7b-instruct-q4_K_M";
+
+pub struct OllamaLlm {
+    client: Client,
+    base_url: String,
+    model: String,
+}
+
+impl OllamaLlm {
+    pub fn new(base_url: Option<String>, model: Option<String>) -> Self {
+        Self {
+            client: Client::new(),
+            base_url: base_url.unwrap_or_else(|| DEFAULT_BASE_URL.to_string()),
+            model: model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+        }
+    }
+
+    /// Check if Ollama is reachable and the model is available.
+    pub async fn health_check(&self) -> Result<bool> {
+        let resp = self
+            .client
+            .get(format!("{}/api/tags", self.base_url))
+            .send()
+            .await
+            .context("Ollama not reachable")?;
+        let body: serde_json::Value = resp.json().await?;
+        let models = body["models"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| m["name"].as_str())
+                    .any(|name| name.starts_with(&self.model))
+            })
+            .unwrap_or(false);
+        Ok(models)
+    }
+
+    /// Pull the model from Ollama registry, streaming progress lines.
+    /// Returns a receiver of status strings (e.g. "pulling manifest", "pull complete").
+    pub async fn pull_model(&self) -> Result<mpsc::Receiver<Result<String>>> {
+        #[derive(Serialize)]
+        struct PullReq<'a> {
+            name: &'a str,
+            stream: bool,
+        }
+        let (tx, rx) = mpsc::channel(64);
+        let resp = self
+            .client
+            .post(format!("{}/api/pull", self.base_url))
+            .json(&PullReq { name: &self.model, stream: true })
+            .send()
+            .await
+            .context("Failed to start model pull")?;
+        let mut stream = resp.bytes_stream();
+        tokio::spawn(async move {
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        if let Ok(text) = std::str::from_utf8(&bytes) {
+                            for line in text.lines().filter(|l| !l.is_empty()) {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                                    let status = val["status"]
+                                        .as_str()
+                                        .unwrap_or(line)
+                                        .to_string();
+                                    if tx.send(Ok(status)).await.is_err() {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e.into())).await;
+                        return;
+                    }
+                }
+            }
+        });
+        Ok(rx)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Ollama /api/chat types
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct ChatRequest<'a> {
+    model: &'a str,
+    messages: Vec<ChatMessage<'a>>,
+    stream: bool,
+}
+
+#[derive(Serialize)]
+struct ChatMessage<'a> {
+    role: &'a str,
+    content: &'a str,
+}
+
+#[derive(Deserialize)]
+struct ChatChunk {
+    message: Option<ChunkMessage>,
+    done: bool,
+}
+
+#[derive(Deserialize)]
+struct ChunkMessage {
+    content: String,
+}
+
+// ---------------------------------------------------------------------------
+// LlmProvider impl
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl LlmProvider for OllamaLlm {
+    async fn chat(&self, system: &str, user: &str) -> Result<mpsc::Receiver<Result<String>>> {
+        let req = ChatRequest {
+            model: &self.model,
+            messages: vec![
+                ChatMessage { role: "system", content: system },
+                ChatMessage { role: "user", content: user },
+            ],
+            stream: true,
+        };
+
+        let resp = self
+            .client
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&req)
+            .send()
+            .await
+            .context("Failed to connect to Ollama /api/chat")?;
+
+        let (tx, rx) = mpsc::channel(128);
+        let mut stream = resp.bytes_stream();
+
+        tokio::spawn(async move {
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        if let Ok(text) = std::str::from_utf8(&bytes) {
+                            for line in text.lines().filter(|l| !l.is_empty()) {
+                                match serde_json::from_str::<ChatChunk>(line) {
+                                    Ok(c) => {
+                                        if let Some(msg) = c.message {
+                                            if !msg.content.is_empty() {
+                                                debug!(token = %msg.content, "llm chunk");
+                                                if tx.send(Ok(msg.content)).await.is_err() {
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        if c.done {
+                                            return;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(Err(e.into())).await;
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e.into())).await;
+                        return;
+                    }
+                }
+            }
+        });
+
+        Ok(rx)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_construction() {
+        let llm = OllamaLlm::new(None, None);
+        assert_eq!(llm.base_url, DEFAULT_BASE_URL);
+        assert_eq!(llm.model, DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn custom_construction() {
+        let llm = OllamaLlm::new(
+            Some("http://localhost:9999".into()),
+            Some("llama3".into()),
+        );
+        assert_eq!(llm.base_url, "http://localhost:9999");
+        assert_eq!(llm.model, "llama3");
+    }
+}

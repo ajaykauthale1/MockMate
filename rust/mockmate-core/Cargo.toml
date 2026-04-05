@@ -15,4 +15,4 @@ flutter_rust_bridge = "2"
 
 [lib]
 name = "mockmate_core"
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["rlib"]
