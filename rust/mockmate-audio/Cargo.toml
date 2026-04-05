@@ -1,0 +1,12 @@
+[package]
+name = "mockmate-audio"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+
+cpal = "0.15"

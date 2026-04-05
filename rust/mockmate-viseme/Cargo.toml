@@ -1,0 +1,13 @@
+[package]
+name = "mockmate-viseme"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+
+mockmate-core = { path = "../mockmate-core" }
+rustfft = "6"
