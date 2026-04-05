@@ -1,0 +1,20 @@
+[package]
+name = "mockmate-bridge"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+flutter_rust_bridge = "=2.12.0"
+mockmate-core = { path = "../mockmate-core" }
+mockmate-llm = { path = "../mockmate-llm" }
+
+[lib]
+name = "mockmate_bridge"
+crate-type = ["cdylib", "staticlib"]
