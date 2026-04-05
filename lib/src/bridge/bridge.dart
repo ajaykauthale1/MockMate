@@ -21,6 +21,12 @@ Future<void> setInteractionMode({required bool isTest}) =>
 Future<bool> ollamaHealthCheck() =>
     RustLib.instance.api.crateBridgeOllamaHealthCheck();
 
+/// Send a user message and get the full LLM response using the current KB + mode.
+/// Builds the system prompt from AppState (KB + InteractionMode) then calls Ollama.
+/// Returns the concatenated response string, or an error message prefixed with "error:".
+Future<String> chat({required String userMessage}) =>
+    RustLib.instance.api.crateBridgeChat(userMessage: userMessage);
+
 /// Pull the default model from Ollama. Streams status strings back to Flutter.
 /// Returns each status line; Flutter polls until "success" or an error.
 /// For simplicity in Phase 1, this collects all status lines and returns them.
