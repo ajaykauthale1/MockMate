@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../audio/audio_provider.dart';
 import '../avatar/avatar_widget.dart';
+import '../settings/settings_screen.dart';
 import '../theme/ske_theme.dart';
 import 'chat_provider.dart';
 
@@ -124,6 +125,13 @@ class _SkeAppBar extends ConsumerWidget implements PreferredSizeWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2)),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.settings_outlined, color: SkeColors.textSecondary),
+          tooltip: 'Settings',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
