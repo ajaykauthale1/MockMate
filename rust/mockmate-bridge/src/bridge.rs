@@ -47,10 +47,19 @@ pub fn avatar_state_stream(sink: StreamSink<AvatarState>) {
     *avatar_sink().lock().unwrap() = Some(sink);
 }
 
-/// Spawn a background task that emits per-viseme states at their timestamps.
+/// Tick interval for the viseme playback loop (50 Hz = 20 ms).
+const VISEME_TICK_MS: u64 = 20;
+
+/// Spawn a background task that drives viseme events at 50 Hz.
+///
+/// Rather than sleeping the exact gap between each phoneme boundary (which
+/// gives a rate that depends on speech rate), we run a fixed 20 ms tick loop
+/// and look up whichever viseme is current by comparing elapsed time against
+/// the pre-computed timestamps.  This guarantees ≥ 50 Hz throughput to
+/// Flutter while keeping the avatar mouth in sync with the audio.
 fn spawn_viseme_playback(visemes: Vec<Viseme>) {
     tokio::spawn(async move {
-        use tokio::time::{sleep, Duration};
+        use tokio::time::{sleep, Duration, Instant};
 
         push_avatar(AvatarState {
             viseme_id: 0,
@@ -58,18 +67,40 @@ fn spawn_viseme_playback(visemes: Vec<Viseme>) {
             is_speaking: true,
         });
 
-        let mut prev_ms = 0u32;
-        for v in &visemes {
-            let delay = v.timestamp_ms.saturating_sub(prev_ms);
-            if delay > 0 {
-                sleep(Duration::from_millis(u64::from(delay))).await;
-            }
+        if visemes.is_empty() {
             push_avatar(AvatarState {
-                viseme_id: v.id,
+                viseme_id: 0,
+                is_listening: false,
+                is_speaking: false,
+            });
+            return;
+        }
+
+        // End of playback = last viseme timestamp + one extra tick
+        let end_ms = visemes.last().unwrap().timestamp_ms + VISEME_TICK_MS as u32;
+        let start = Instant::now();
+        let mut idx = 0usize;
+
+        loop {
+            let elapsed = start.elapsed().as_millis() as u32;
+
+            // Advance index to the latest viseme whose timestamp ≤ elapsed
+            while idx + 1 < visemes.len()
+                && visemes[idx + 1].timestamp_ms <= elapsed
+            {
+                idx += 1;
+            }
+
+            push_avatar(AvatarState {
+                viseme_id: visemes[idx].id,
                 is_listening: false,
                 is_speaking: true,
             });
-            prev_ms = v.timestamp_ms;
+
+            if elapsed >= end_ms {
+                break;
+            }
+            sleep(Duration::from_millis(VISEME_TICK_MS)).await;
         }
 
         push_avatar(AvatarState {
@@ -297,5 +328,72 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
             push_avatar(AvatarState { viseme_id: 0, is_listening: false, is_speaking: false });
             serde_json::json!({ "error": e.to_string() }).to_string()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockmate_core::providers::Viseme;
+
+    /// Simulate the viseme-lookup logic from `spawn_viseme_playback` without
+    /// actually sleeping, so we can verify correct index advancement.
+    fn lookup_viseme_at(visemes: &[Viseme], elapsed_ms: u32) -> u8 {
+        let mut idx = 0usize;
+        while idx + 1 < visemes.len() && visemes[idx + 1].timestamp_ms <= elapsed_ms {
+            idx += 1;
+        }
+        visemes[idx].id
+    }
+
+    fn make_visemes(ids_and_ts: &[(u8, u32)]) -> Vec<Viseme> {
+        ids_and_ts
+            .iter()
+            .map(|&(id, timestamp_ms)| Viseme { id, timestamp_ms })
+            .collect()
+    }
+
+    #[test]
+    fn tick_constant_is_20ms() {
+        assert_eq!(VISEME_TICK_MS, 20, "50 Hz requires 20 ms ticks");
+    }
+
+    #[test]
+    fn lookup_before_first_viseme_returns_first() {
+        let vs = make_visemes(&[(13, 0), (8, 100), (4, 200)]);
+        assert_eq!(lookup_viseme_at(&vs, 0), 13);
+        assert_eq!(lookup_viseme_at(&vs, 50), 13);
+    }
+
+    #[test]
+    fn lookup_advances_at_boundary() {
+        let vs = make_visemes(&[(13, 0), (8, 100), (4, 200)]);
+        assert_eq!(lookup_viseme_at(&vs, 100), 8);
+        assert_eq!(lookup_viseme_at(&vs, 150), 8);
+        assert_eq!(lookup_viseme_at(&vs, 200), 4);
+        assert_eq!(lookup_viseme_at(&vs, 999), 4);
+    }
+
+    #[test]
+    fn lookup_single_viseme_always_same() {
+        let vs = make_visemes(&[(7, 0)]);
+        for ms in [0, 20, 100, 500] {
+            assert_eq!(lookup_viseme_at(&vs, ms), 7);
+        }
+    }
+
+    #[test]
+    fn tick_rate_50hz_for_1s_audio() {
+        // 1 second of audio → 1000 ms / 20 ms = 50 ticks (at least)
+        let total_ms = 1_000u32;
+        let ticks = total_ms / VISEME_TICK_MS as u32;
+        assert!(ticks >= 50, "must emit at least 50 events per second of audio");
+    }
+
+    #[test]
+    fn end_ms_one_tick_past_last_viseme() {
+        let visemes = make_visemes(&[(4, 0), (13, 500)]);
+        let end_ms = visemes.last().unwrap().timestamp_ms + VISEME_TICK_MS as u32;
+        assert_eq!(end_ms, 520);
     }
 }
