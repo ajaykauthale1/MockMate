@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1078098342;
+  int get rustContentHash => 60735972;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -76,13 +76,32 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Stream<AvatarState> crateBridgeAvatarStateStream();
+
   Future<String> crateBridgeChat({required String userMessage});
 
   Future<String> crateBridgeExtractVisemes({required List<int> pcmBytes});
 
+  Future<bool> crateBridgeInitAnthropicLlm({
+    required String apiKey,
+    required String model,
+  });
+
   Future<bool> crateBridgeInitElevenlabsTts({
     required String apiKey,
     required String voiceId,
+  });
+
+  Future<bool> crateBridgeInitKokoroTts({
+    required String modelPath,
+    required String stylePath,
+    required String espeakBin,
+  });
+
+  Future<bool> crateBridgeInitOpenaiLlm({
+    required String apiKey,
+    required String model,
+    required String baseUrl,
   });
 
   Future<bool> crateBridgeInitPiperTts({
@@ -110,6 +129,11 @@ abstract class RustLibApi extends BaseApi {
   Future<Uint8List> crateBridgeSynthesiseText({required String text});
 
   Future<String> crateBridgeTranscribeAudio({required List<int> pcmBytes});
+
+  Future<bool> crateBridgeValidateApiKey({
+    required String provider,
+    required String apiKey,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -121,6 +145,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Stream<AvatarState> crateBridgeAvatarStateStream() {
+    final sink = RustStreamSink<AvatarState>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_avatar_state_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 1,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateBridgeAvatarStateStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateBridgeAvatarStateStreamConstMeta =>
+      const TaskConstMeta(debugName: "avatar_state_stream", argNames: ["sink"]);
+
+  @override
   Future<String> crateBridgeChat({required String userMessage}) {
     return handler.executeNormal(
       NormalTask(
@@ -130,7 +186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 2,
             port: port_,
           );
         },
@@ -158,7 +214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -177,6 +233,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "extract_visemes", argNames: ["pcmBytes"]);
 
   @override
+  Future<bool> crateBridgeInitAnthropicLlm({
+    required String apiKey,
+    required String model,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(apiKey, serializer);
+          sse_encode_String(model, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitAnthropicLlmConstMeta,
+        argValues: [apiKey, model],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitAnthropicLlmConstMeta =>
+      const TaskConstMeta(
+        debugName: "init_anthropic_llm",
+        argNames: ["apiKey", "model"],
+      );
+
+  @override
   Future<bool> crateBridgeInitElevenlabsTts({
     required String apiKey,
     required String voiceId,
@@ -190,7 +281,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 5,
             port: port_,
           );
         },
@@ -212,6 +303,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateBridgeInitKokoroTts({
+    required String modelPath,
+    required String stylePath,
+    required String espeakBin,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modelPath, serializer);
+          sse_encode_String(stylePath, serializer);
+          sse_encode_String(espeakBin, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitKokoroTtsConstMeta,
+        argValues: [modelPath, stylePath, espeakBin],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitKokoroTtsConstMeta => const TaskConstMeta(
+    debugName: "init_kokoro_tts",
+    argNames: ["modelPath", "stylePath", "espeakBin"],
+  );
+
+  @override
+  Future<bool> crateBridgeInitOpenaiLlm({
+    required String apiKey,
+    required String model,
+    required String baseUrl,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(apiKey, serializer);
+          sse_encode_String(model, serializer);
+          sse_encode_String(baseUrl, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeInitOpenaiLlmConstMeta,
+        argValues: [apiKey, model, baseUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeInitOpenaiLlmConstMeta => const TaskConstMeta(
+    debugName: "init_openai_llm",
+    argNames: ["apiKey", "model", "baseUrl"],
+  );
+
+  @override
   Future<bool> crateBridgeInitPiperTts({
     required String piperBin,
     required String modelPath,
@@ -225,7 +388,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 8,
             port: port_,
           );
         },
@@ -255,7 +418,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 9,
             port: port_,
           );
         },
@@ -289,7 +452,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 10,
             port: port_,
           );
         },
@@ -319,7 +482,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 11,
             port: port_,
           );
         },
@@ -346,7 +509,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 12,
             port: port_,
           );
         },
@@ -373,7 +536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 13,
             port: port_,
           );
         },
@@ -401,7 +564,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 14,
             port: port_,
           );
         },
@@ -432,7 +595,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 15,
             port: port_,
           );
         },
@@ -463,7 +626,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 16,
             port: port_,
           );
         },
@@ -491,7 +654,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 17,
             port: port_,
           );
         },
@@ -511,10 +674,71 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     argNames: ["pcmBytes"],
   );
 
+  @override
+  Future<bool> crateBridgeValidateApiKey({
+    required String provider,
+    required String apiKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(provider, serializer);
+          sse_encode_String(apiKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeValidateApiKeyConstMeta,
+        argValues: [provider, apiKey],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeValidateApiKeyConstMeta => const TaskConstMeta(
+    debugName: "validate_api_key",
+    argNames: ["provider", "apiKey"],
+  );
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AnyhowException(raw as String);
+  }
+
+  @protected
+  RustStreamSink<AvatarState> dco_decode_StreamSink_avatar_state_Sse(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
+  }
+
+  @protected
+  AvatarState dco_decode_avatar_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AvatarState(
+      visemeId: dco_decode_u_8(arr[0]),
+      isListening: dco_decode_bool(arr[1]),
+      isSpeaking: dco_decode_bool(arr[2]),
+    );
   }
 
   @protected
@@ -554,10 +778,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_String(deserializer);
+    return AnyhowException(inner);
+  }
+
+  @protected
+  RustStreamSink<AvatarState> sse_decode_StreamSink_avatar_state_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
     return utf8.decoder.convert(inner);
+  }
+
+  @protected
+  AvatarState sse_decode_avatar_state(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_visemeId = sse_decode_u_8(deserializer);
+    var var_isListening = sse_decode_bool(deserializer);
+    var var_isSpeaking = sse_decode_bool(deserializer);
+    return AvatarState(
+      visemeId: var_visemeId,
+      isListening: var_isListening,
+      isSpeaking: var_isSpeaking,
+    );
   }
 
   @protected
@@ -610,9 +862,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_StreamSink_avatar_state_Sse(
+    RustStreamSink<AvatarState> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_avatar_state,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_avatar_state(AvatarState self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.visemeId, serializer);
+    sse_encode_bool(self.isListening, serializer);
+    sse_encode_bool(self.isSpeaking, serializer);
   }
 
   @protected

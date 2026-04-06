@@ -58,11 +58,18 @@ impl SessionManager {
             response_text.push_str(&chunk?);
         }
 
-        // 4. TTS
-        let audio = self.state.tts.read().await.synthesise(&response_text).await?;
+        // 4. TTS — use synthesise_with_visemes; Kokoro returns phoneme-driven
+        //    visemes inline; other providers return an empty vec.
+        let tts_event = self.state.tts.read().await
+            .synthesise_with_visemes(&response_text).await?;
+        let audio = tts_event.audio;
 
-        // 5. Viseme
-        let visemes = self.state.viseme.read().await.extract(&audio).await?;
+        // 5. Viseme — use phoneme-driven visemes when available, else FFT.
+        let visemes = if tts_event.visemes.is_empty() {
+            self.state.viseme.read().await.extract(&audio).await?
+        } else {
+            tts_event.visemes
+        };
 
         Ok(SessionResult {
             transcript,

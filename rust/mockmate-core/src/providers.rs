@@ -26,12 +26,36 @@ pub enum InteractionMode {
 // Traits
 // ---------------------------------------------------------------------------
 
+/// Bundles TTS audio with phoneme-derived viseme frames.
+///
+/// Providers that support phoneme extraction (e.g. `KokoroTts`) populate
+/// `visemes` directly from the IPA sequence.  Others return an empty `visemes`
+/// vec; `SessionManager` then falls back to `FftVisemeExtractor`.
+#[derive(Debug)]
+pub struct TtsPlaybackEvent {
+    /// Raw PCM audio (f32 LE, provider's native sample rate).
+    pub audio: Vec<u8>,
+    /// Phoneme-driven viseme frames.  Empty when the provider does not support
+    /// inline phoneme extraction.
+    pub visemes: Vec<Viseme>,
+}
+
 /// Provides text-to-speech synthesis.
 /// Implementors: PiperTts, KokoroTts, ElevenLabsTts (BYOK).
 #[async_trait]
 pub trait TtsProvider: Send + Sync {
     /// Synthesise `text` and return raw PCM audio bytes (f32 LE, 24 kHz mono).
     async fn synthesise(&self, text: &str) -> Result<Vec<u8>>;
+
+    /// Synthesise `text` and return audio **plus** phoneme-aligned visemes.
+    ///
+    /// The default implementation calls [`synthesise`] and returns an empty
+    /// viseme list.  Providers with phoneme access (e.g. `KokoroTts`) should
+    /// override this to populate `visemes` without a separate FFT pass.
+    async fn synthesise_with_visemes(&self, text: &str) -> Result<TtsPlaybackEvent> {
+        let audio = self.synthesise(text).await?;
+        Ok(TtsPlaybackEvent { audio, visemes: vec![] })
+    }
 }
 
 /// Provides large-language-model completions.
