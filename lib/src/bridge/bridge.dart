@@ -6,7 +6,16 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `state`
+// These functions are ignored because they are not marked as `pub`: `avatar_sink`, `push_avatar`, `spawn_viseme_playback`, `state`
+
+/// Subscribe to avatar state events.
+///
+/// Call once from Flutter on startup.  The stream emits an [`AvatarState`]
+/// whenever VAD or TTS state changes.  Viseme events are timed to match the
+/// synthesised audio duration so the avatar mouth is synchronised with
+/// playback without a separate timer on the Dart side.
+Stream<AvatarState> avatarStateStream() =>
+    RustLib.instance.api.crateBridgeAvatarStateStream();
 
 /// Load (or replace) the knowledge base text in Rust AppState.
 Future<void> loadKnowledgeBase({required String text}) =>
@@ -44,6 +53,22 @@ Future<bool> initWhisperStt({
 Future<bool> initSileroVad({required String modelPath}) =>
     RustLib.instance.api.crateBridgeInitSileroVad(modelPath: modelPath);
 
+/// Initialise Kokoro-82M TTS (ONNX-native, no subprocess for inference).
+///
+/// * `model_path`  — path to `kokoro-v0_19.onnx`
+/// * `style_path`  — raw binary file of exactly 1 024 bytes (256 × f32 LE),
+///                   one speaker embedding extracted from `voices.bin`
+/// * `espeak_bin`  — path to the `espeak-ng` executable (used for phonemisation)
+Future<bool> initKokoroTts({
+  required String modelPath,
+  required String stylePath,
+  required String espeakBin,
+}) => RustLib.instance.api.crateBridgeInitKokoroTts(
+  modelPath: modelPath,
+  stylePath: stylePath,
+  espeakBin: espeakBin,
+);
+
 /// Initialise Piper TTS.
 /// `piper_bin` = path to the piper executable; `model_path` = ONNX model.
 Future<bool> initPiperTts({
@@ -78,5 +103,40 @@ Future<String> extractVisemes({required List<int> pcmBytes}) =>
 
 /// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
 /// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
+///
+/// Also drives the [`avatar_state_stream`]: pushes `is_listening` at the start
+/// and hands off to `spawn_viseme_playback` on success so the avatar animates
+/// without any Flutter-side timer.
 Future<String> processAudioTurn({required List<int> pcmBytes}) =>
     RustLib.instance.api.crateBridgeProcessAudioTurn(pcmBytes: pcmBytes);
+
+/// Snapshot of avatar animation state pushed to Flutter on every change.
+class AvatarState {
+  /// Current mouth-shape viseme (0 = closed / idle).
+  final int visemeId;
+
+  /// `true` while VAD detects the user speaking.
+  final bool isListening;
+
+  /// `true` while the AI's TTS audio is (notionally) playing.
+  final bool isSpeaking;
+
+  const AvatarState({
+    required this.visemeId,
+    required this.isListening,
+    required this.isSpeaking,
+  });
+
+  @override
+  int get hashCode =>
+      visemeId.hashCode ^ isListening.hashCode ^ isSpeaking.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AvatarState &&
+          runtimeType == other.runtimeType &&
+          visemeId == other.visemeId &&
+          isListening == other.isListening &&
+          isSpeaking == other.isSpeaking;
+}

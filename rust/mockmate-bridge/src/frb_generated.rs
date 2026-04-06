@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1078098342;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1913217984;
 
 // Section: executor
 
@@ -46,6 +46,44 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__bridge__avatar_state_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "avatar_state_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::bridge::AvatarState,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::bridge::avatar_state_stream(api_sink);
+                    })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__bridge__chat_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -151,6 +189,51 @@ fn wire__crate__bridge__init_elevenlabs_tts_impl(
                     (move || async move {
                         let output_ok = Result::<_, ()>::Ok(
                             crate::bridge::init_elevenlabs_tts(api_api_key, api_voice_id).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__init_kokoro_tts_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "init_kokoro_tts",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_model_path = <String>::sse_decode(&mut deserializer);
+            let api_style_path = <String>::sse_decode(&mut deserializer);
+            let api_espeak_bin = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::bridge::init_kokoro_tts(
+                                api_model_path,
+                                api_style_path,
+                                api_espeak_bin,
+                            )
+                            .await,
                         )?;
                         Ok(output_ok)
                     })()
@@ -540,11 +623,43 @@ fn wire__crate__bridge__transcribe_audio_impl(
 
 // Section: dart2rust
 
+impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::anyhow::anyhow!("{}", inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<crate::bridge::AvatarState, flutter_rust_bridge::for_generated::SseCodec>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
 impl SseDecode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <Vec<u8>>::sse_decode(deserializer);
         return String::from_utf8(inner).unwrap();
+    }
+}
+
+impl SseDecode for crate::bridge::AvatarState {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_visemeId = <u8>::sse_decode(deserializer);
+        let mut var_isListening = <bool>::sse_decode(deserializer);
+        let mut var_isSpeaking = <bool>::sse_decode(deserializer);
+        return crate::bridge::AvatarState {
+            viseme_id: var_visemeId,
+            is_listening: var_isListening,
+            is_speaking: var_isSpeaking,
+        };
     }
 }
 
@@ -607,19 +722,21 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__bridge__chat_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__bridge__extract_visemes_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
+        1 => wire__crate__bridge__avatar_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__bridge__chat_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__bridge__extract_visemes_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__bridge__init_kokoro_tts_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -638,10 +755,53 @@ fn pde_ffi_dispatcher_sync_impl(
 
 // Section: rust2dart
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::bridge::AvatarState {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.viseme_id.into_into_dart().into_dart(),
+            self.is_listening.into_into_dart().into_dart(),
+            self.is_speaking.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::bridge::AvatarState {}
+impl flutter_rust_bridge::IntoIntoDart<crate::bridge::AvatarState> for crate::bridge::AvatarState {
+    fn into_into_dart(self) -> crate::bridge::AvatarState {
+        self
+    }
+}
+
+impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(format!("{:?}", self), serializer);
+    }
+}
+
+impl SseEncode
+    for StreamSink<crate::bridge::AvatarState, flutter_rust_bridge::for_generated::SseCodec>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
 impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.into_bytes(), serializer);
+    }
+}
+
+impl SseEncode for crate::bridge::AvatarState {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u8>::sse_encode(self.viseme_id, serializer);
+        <bool>::sse_encode(self.is_listening, serializer);
+        <bool>::sse_encode(self.is_speaking, serializer);
     }
 }
 
