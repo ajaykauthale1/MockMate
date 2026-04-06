@@ -1,8 +1,84 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use mockmate_core::{prompt::build_system_prompt, providers::InteractionMode, state::AppState};
+use crate::frb_generated::StreamSink;
+use mockmate_core::{
+    prompt::build_system_prompt,
+    providers::{InteractionMode, Viseme},
+    state::AppState,
+};
 use mockmate_llm::OllamaLlm;
 use mockmate_viseme::FftVisemeExtractor;
+
+// ---------------------------------------------------------------------------
+// AvatarState stream — unified VAD + TTS viseme events for the Flutter avatar
+// ---------------------------------------------------------------------------
+
+/// Snapshot of avatar animation state pushed to Flutter on every change.
+pub struct AvatarState {
+    /// Current mouth-shape viseme (0 = closed / idle).
+    pub viseme_id: u8,
+    /// `true` while VAD detects the user speaking.
+    pub is_listening: bool,
+    /// `true` while the AI's TTS audio is (notionally) playing.
+    pub is_speaking: bool,
+}
+
+static AVATAR_SINK: OnceLock<Mutex<Option<StreamSink<AvatarState>>>> = OnceLock::new();
+
+fn avatar_sink() -> &'static Mutex<Option<StreamSink<AvatarState>>> {
+    AVATAR_SINK.get_or_init(|| Mutex::new(None))
+}
+
+fn push_avatar(state: AvatarState) {
+    if let Ok(guard) = avatar_sink().lock() {
+        if let Some(sink) = guard.as_ref() {
+            let _ = sink.add(state);
+        }
+    }
+}
+
+/// Subscribe to avatar state events.
+///
+/// Call once from Flutter on startup.  The stream emits an [`AvatarState`]
+/// whenever VAD or TTS state changes.  Viseme events are timed to match the
+/// synthesised audio duration so the avatar mouth is synchronised with
+/// playback without a separate timer on the Dart side.
+pub fn avatar_state_stream(sink: StreamSink<AvatarState>) {
+    *avatar_sink().lock().unwrap() = Some(sink);
+}
+
+/// Spawn a background task that emits per-viseme states at their timestamps.
+fn spawn_viseme_playback(visemes: Vec<Viseme>) {
+    tokio::spawn(async move {
+        use tokio::time::{sleep, Duration};
+
+        push_avatar(AvatarState {
+            viseme_id: 0,
+            is_listening: false,
+            is_speaking: true,
+        });
+
+        let mut prev_ms = 0u32;
+        for v in &visemes {
+            let delay = v.timestamp_ms.saturating_sub(prev_ms);
+            if delay > 0 {
+                sleep(Duration::from_millis(u64::from(delay))).await;
+            }
+            push_avatar(AvatarState {
+                viseme_id: v.id,
+                is_listening: false,
+                is_speaking: true,
+            });
+            prev_ms = v.timestamp_ms;
+        }
+
+        push_avatar(AvatarState {
+            viseme_id: 0,
+            is_listening: false,
+            is_speaking: false,
+        });
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Global state — Arc<AppState> so it can be cheaply shared with SessionManager.
@@ -189,6 +265,10 @@ pub async fn extract_visemes(pcm_bytes: Vec<u8>) -> String {
 
 /// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
 /// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
+///
+/// Also drives the [`avatar_state_stream`]: pushes `is_listening` at the start
+/// and hands off to `spawn_viseme_playback` on success so the avatar animates
+/// without any Flutter-side timer.
 pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
     use mockmate_session::SessionManager;
 
@@ -197,9 +277,13 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
         .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .collect();
 
+    push_avatar(AvatarState { viseme_id: 0, is_listening: true, is_speaking: false });
+
     let mgr = SessionManager::new(Arc::clone(state()));
     match mgr.process_audio(&samples).await {
         Ok(r) => {
+            spawn_viseme_playback(r.visemes.clone());
+
             let visemes_json =
                 serde_json::to_string(&r.visemes).unwrap_or_else(|_| "[]".to_string());
             serde_json::json!({
@@ -209,6 +293,9 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
             })
             .to_string()
         }
-        Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
+        Err(e) => {
+            push_avatar(AvatarState { viseme_id: 0, is_listening: false, is_speaking: false });
+            serde_json::json!({ "error": e.to_string() }).to_string()
+        }
     }
 }
