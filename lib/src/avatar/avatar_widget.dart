@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,68 +5,29 @@ import '../audio/audio_provider.dart';
 import '../theme/ske_theme.dart';
 import 'avatar_painter.dart';
 
-class AvatarWidget extends ConsumerStatefulWidget {
+class AvatarWidget extends ConsumerWidget {
   final double size;
   const AvatarWidget({super.key, this.size = 180});
 
   @override
-  ConsumerState<AvatarWidget> createState() => _AvatarWidgetState();
-}
-
-class _AvatarWidgetState extends ConsumerState<AvatarWidget> {
-  Timer? _visemeTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // React to new viseme sequences emitted by the conversation pipeline.
-    ref.listenManual(pendingVisemesProvider, (_, json) {
-      if (json != '[]') _playVisemes(json);
-    });
-  }
-
-  void _playVisemes(String json) {
-    _visemeTimer?.cancel();
-    ref.read(currentVisemeIdProvider.notifier).state = 0;
-
-    final List<dynamic> raw;
-    try {
-      raw = jsonDecode(json) as List<dynamic>;
-    } catch (_) {
-      return;
-    }
-    if (raw.isEmpty) {
-      ref.read(audioStateProvider.notifier).state = AudioState.idle;
-      return;
-    }
-
-    final ids = raw.map((e) => (e['id'] as num).toInt()).toList();
-    int i = 0;
-
-    _visemeTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-      if (!mounted || i >= ids.length) {
-        t.cancel();
-        if (mounted) {
-          ref.read(currentVisemeIdProvider.notifier).state = 0;
-          ref.read(audioStateProvider.notifier).state = AudioState.idle;
-        }
-        return;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Drive viseme + audio state directly from the Rust stream.
+    ref.listen(avatarStateStreamProvider, (_, next) {
+      final s = next.valueOrNull;
+      if (s == null) return;
+      ref.read(currentVisemeIdProvider.notifier).state = s.visemeId;
+      if (s.isListening) {
+        ref.read(audioStateProvider.notifier).state = AudioState.listening;
+      } else if (s.isSpeaking) {
+        ref.read(audioStateProvider.notifier).state = AudioState.speaking;
+      } else {
+        ref.read(audioStateProvider.notifier).state = AudioState.idle;
       }
-      ref.read(currentVisemeIdProvider.notifier).state = ids[i++];
     });
-  }
 
-  @override
-  void dispose() {
-    _visemeTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     final visemeId = ref.watch(currentVisemeIdProvider);
     final audioState = ref.watch(audioStateProvider);
-    final s = widget.size;
+    final s = size;
 
     return SizedBox(
       width: s + 20,
@@ -166,7 +124,7 @@ class _PulsingRingState extends State<_PulsingRing>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) {
+      builder: (context, child) {
         final t = _ctrl.value;
         return Container(
           width: widget.size + 8 + t * 14,

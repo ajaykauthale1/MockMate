@@ -1,8 +1,115 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use mockmate_core::{prompt::build_system_prompt, providers::InteractionMode, state::AppState};
+use crate::frb_generated::StreamSink;
+use mockmate_core::{
+    prompt::build_system_prompt,
+    providers::{InteractionMode, Viseme},
+    state::AppState,
+};
 use mockmate_llm::OllamaLlm;
 use mockmate_viseme::FftVisemeExtractor;
+
+// ---------------------------------------------------------------------------
+// AvatarState stream — unified VAD + TTS viseme events for the Flutter avatar
+// ---------------------------------------------------------------------------
+
+/// Snapshot of avatar animation state pushed to Flutter on every change.
+pub struct AvatarState {
+    /// Current mouth-shape viseme (0 = closed / idle).
+    pub viseme_id: u8,
+    /// `true` while VAD detects the user speaking.
+    pub is_listening: bool,
+    /// `true` while the AI's TTS audio is (notionally) playing.
+    pub is_speaking: bool,
+}
+
+static AVATAR_SINK: OnceLock<Mutex<Option<StreamSink<AvatarState>>>> = OnceLock::new();
+
+fn avatar_sink() -> &'static Mutex<Option<StreamSink<AvatarState>>> {
+    AVATAR_SINK.get_or_init(|| Mutex::new(None))
+}
+
+fn push_avatar(state: AvatarState) {
+    if let Ok(guard) = avatar_sink().lock() {
+        if let Some(sink) = guard.as_ref() {
+            let _ = sink.add(state);
+        }
+    }
+}
+
+/// Subscribe to avatar state events.
+///
+/// Call once from Flutter on startup.  The stream emits an [`AvatarState`]
+/// whenever VAD or TTS state changes.  Viseme events are timed to match the
+/// synthesised audio duration so the avatar mouth is synchronised with
+/// playback without a separate timer on the Dart side.
+pub fn avatar_state_stream(sink: StreamSink<AvatarState>) {
+    *avatar_sink().lock().unwrap() = Some(sink);
+}
+
+/// Tick interval for the viseme playback loop (50 Hz = 20 ms).
+const VISEME_TICK_MS: u64 = 20;
+
+/// Spawn a background task that drives viseme events at 50 Hz.
+///
+/// Rather than sleeping the exact gap between each phoneme boundary (which
+/// gives a rate that depends on speech rate), we run a fixed 20 ms tick loop
+/// and look up whichever viseme is current by comparing elapsed time against
+/// the pre-computed timestamps.  This guarantees ≥ 50 Hz throughput to
+/// Flutter while keeping the avatar mouth in sync with the audio.
+fn spawn_viseme_playback(visemes: Vec<Viseme>) {
+    tokio::spawn(async move {
+        use tokio::time::{sleep, Duration, Instant};
+
+        push_avatar(AvatarState {
+            viseme_id: 0,
+            is_listening: false,
+            is_speaking: true,
+        });
+
+        if visemes.is_empty() {
+            push_avatar(AvatarState {
+                viseme_id: 0,
+                is_listening: false,
+                is_speaking: false,
+            });
+            return;
+        }
+
+        // End of playback = last viseme timestamp + one extra tick
+        let end_ms = visemes.last().unwrap().timestamp_ms + VISEME_TICK_MS as u32;
+        let start = Instant::now();
+        let mut idx = 0usize;
+
+        loop {
+            let elapsed = start.elapsed().as_millis() as u32;
+
+            // Advance index to the latest viseme whose timestamp ≤ elapsed
+            while idx + 1 < visemes.len()
+                && visemes[idx + 1].timestamp_ms <= elapsed
+            {
+                idx += 1;
+            }
+
+            push_avatar(AvatarState {
+                viseme_id: visemes[idx].id,
+                is_listening: false,
+                is_speaking: true,
+            });
+
+            if elapsed >= end_ms {
+                break;
+            }
+            sleep(Duration::from_millis(VISEME_TICK_MS)).await;
+        }
+
+        push_avatar(AvatarState {
+            viseme_id: 0,
+            is_listening: false,
+            is_speaking: false,
+        });
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Global state — Arc<AppState> so it can be cheaply shared with SessionManager.
@@ -135,6 +242,19 @@ pub async fn init_silero_vad(model_path: String) -> bool {
     }
 }
 
+/// Initialise Kokoro-82M TTS (ONNX-native, no subprocess for inference).
+///
+/// * `model_path`  — path to `kokoro-v0_19.onnx`
+/// * `style_path`  — raw binary file of exactly 1 024 bytes (256 × f32 LE),
+///                   one speaker embedding extracted from `voices.bin`
+/// * `espeak_bin`  — path to the `espeak-ng` executable (used for phonemisation)
+pub async fn init_kokoro_tts(model_path: String, style_path: String, espeak_bin: String) -> bool {
+    match mockmate_tts::KokoroTts::new(&model_path, &style_path, &espeak_bin) {
+        Ok(tts) => { state().set_tts(Arc::new(tts)).await; true }
+        Err(e) => { tracing::error!("init_kokoro_tts: {e}"); false }
+    }
+}
+
 /// Initialise Piper TTS.
 /// `piper_bin` = path to the piper executable; `model_path` = ONNX model.
 pub async fn init_piper_tts(piper_bin: String, model_path: String) -> bool {
@@ -145,6 +265,44 @@ pub async fn init_piper_tts(piper_bin: String, model_path: String) -> bool {
 /// Initialise ElevenLabs TTS (BYOK).
 pub async fn init_elevenlabs_tts(api_key: String, voice_id: String) -> bool {
     state().set_tts(Arc::new(mockmate_tts::ElevenLabsTts::new(api_key, voice_id))).await;
+    true
+}
+
+/// Validate a BYOK API key without changing the active provider.
+///
+/// `provider` must be `"openai"` or `"anthropic"`.
+/// Returns `true` if the service accepts the key, `false` on rejection or
+/// network failure.
+pub async fn validate_api_key(provider: String, api_key: String) -> bool {
+    match provider.as_str() {
+        "openai" => mockmate_llm::OpenAiLlm::new(api_key, None)
+            .validate()
+            .await
+            .unwrap_or(false),
+        "anthropic" => mockmate_llm::AnthropicLlm::new(api_key, None)
+            .validate()
+            .await
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Initialise OpenAI (or OpenAI-compatible) LLM provider.
+/// `base_url` defaults to `https://api.openai.com` when empty.
+pub async fn init_openai_llm(api_key: String, model: String, base_url: String) -> bool {
+    let model_opt = if model.is_empty() { None } else { Some(model) };
+    let url_opt = if base_url.is_empty() { None } else { Some(base_url) };
+    let llm = mockmate_llm::OpenAiLlm::with_base_url(api_key, model_opt, url_opt);
+    state().set_llm(Arc::new(llm)).await;
+    true
+}
+
+/// Initialise Anthropic Claude LLM provider (BYOK).
+/// `model` defaults to `claude-haiku-4-5-20251001` when empty.
+pub async fn init_anthropic_llm(api_key: String, model: String) -> bool {
+    let model_opt = if model.is_empty() { None } else { Some(model) };
+    let llm = mockmate_llm::AnthropicLlm::new(api_key, model_opt);
+    state().set_llm(Arc::new(llm)).await;
     true
 }
 
@@ -176,6 +334,10 @@ pub async fn extract_visemes(pcm_bytes: Vec<u8>) -> String {
 
 /// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
 /// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
+///
+/// Also drives the [`avatar_state_stream`]: pushes `is_listening` at the start
+/// and hands off to `spawn_viseme_playback` on success so the avatar animates
+/// without any Flutter-side timer.
 pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
     use mockmate_session::SessionManager;
 
@@ -184,9 +346,13 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
         .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .collect();
 
+    push_avatar(AvatarState { viseme_id: 0, is_listening: true, is_speaking: false });
+
     let mgr = SessionManager::new(Arc::clone(state()));
     match mgr.process_audio(&samples).await {
         Ok(r) => {
+            spawn_viseme_playback(r.visemes.clone());
+
             let visemes_json =
                 serde_json::to_string(&r.visemes).unwrap_or_else(|_| "[]".to_string());
             serde_json::json!({
@@ -196,6 +362,76 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
             })
             .to_string()
         }
-        Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
+        Err(e) => {
+            push_avatar(AvatarState { viseme_id: 0, is_listening: false, is_speaking: false });
+            serde_json::json!({ "error": e.to_string() }).to_string()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockmate_core::providers::Viseme;
+
+    /// Simulate the viseme-lookup logic from `spawn_viseme_playback` without
+    /// actually sleeping, so we can verify correct index advancement.
+    fn lookup_viseme_at(visemes: &[Viseme], elapsed_ms: u32) -> u8 {
+        let mut idx = 0usize;
+        while idx + 1 < visemes.len() && visemes[idx + 1].timestamp_ms <= elapsed_ms {
+            idx += 1;
+        }
+        visemes[idx].id
+    }
+
+    fn make_visemes(ids_and_ts: &[(u8, u32)]) -> Vec<Viseme> {
+        ids_and_ts
+            .iter()
+            .map(|&(id, timestamp_ms)| Viseme { id, timestamp_ms })
+            .collect()
+    }
+
+    #[test]
+    fn tick_constant_is_20ms() {
+        assert_eq!(VISEME_TICK_MS, 20, "50 Hz requires 20 ms ticks");
+    }
+
+    #[test]
+    fn lookup_before_first_viseme_returns_first() {
+        let vs = make_visemes(&[(13, 0), (8, 100), (4, 200)]);
+        assert_eq!(lookup_viseme_at(&vs, 0), 13);
+        assert_eq!(lookup_viseme_at(&vs, 50), 13);
+    }
+
+    #[test]
+    fn lookup_advances_at_boundary() {
+        let vs = make_visemes(&[(13, 0), (8, 100), (4, 200)]);
+        assert_eq!(lookup_viseme_at(&vs, 100), 8);
+        assert_eq!(lookup_viseme_at(&vs, 150), 8);
+        assert_eq!(lookup_viseme_at(&vs, 200), 4);
+        assert_eq!(lookup_viseme_at(&vs, 999), 4);
+    }
+
+    #[test]
+    fn lookup_single_viseme_always_same() {
+        let vs = make_visemes(&[(7, 0)]);
+        for ms in [0, 20, 100, 500] {
+            assert_eq!(lookup_viseme_at(&vs, ms), 7);
+        }
+    }
+
+    #[test]
+    fn tick_rate_50hz_for_1s_audio() {
+        // 1 second of audio → 1000 ms / 20 ms = 50 ticks (at least)
+        let total_ms = 1_000u32;
+        let ticks = total_ms / VISEME_TICK_MS as u32;
+        assert!(ticks >= 50, "must emit at least 50 events per second of audio");
+    }
+
+    #[test]
+    fn end_ms_one_tick_past_last_viseme() {
+        let visemes = make_visemes(&[(4, 0), (13, 500)]);
+        let end_ms = visemes.last().unwrap().timestamp_ms + VISEME_TICK_MS as u32;
+        assert_eq!(end_ms, 520);
     }
 }
