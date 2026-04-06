@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1661514601;
+  int get rustContentHash => 60735972;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -129,6 +129,11 @@ abstract class RustLibApi extends BaseApi {
   Future<Uint8List> crateBridgeSynthesiseText({required String text});
 
   Future<String> crateBridgeTranscribeAudio({required List<int> pcmBytes});
+
+  Future<bool> crateBridgeValidateApiKey({
+    required String provider,
+    required String apiKey,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -667,6 +672,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateBridgeTranscribeAudioConstMeta => const TaskConstMeta(
     debugName: "transcribe_audio",
     argNames: ["pcmBytes"],
+  );
+
+  @override
+  Future<bool> crateBridgeValidateApiKey({
+    required String provider,
+    required String apiKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(provider, serializer);
+          sse_encode_String(apiKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeValidateApiKeyConstMeta,
+        argValues: [provider, apiKey],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeValidateApiKeyConstMeta => const TaskConstMeta(
+    debugName: "validate_api_key",
+    argNames: ["provider", "apiKey"],
   );
 
   @protected

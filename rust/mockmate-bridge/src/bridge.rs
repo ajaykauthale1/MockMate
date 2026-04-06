@@ -268,6 +268,25 @@ pub async fn init_elevenlabs_tts(api_key: String, voice_id: String) -> bool {
     true
 }
 
+/// Validate a BYOK API key without changing the active provider.
+///
+/// `provider` must be `"openai"` or `"anthropic"`.
+/// Returns `true` if the service accepts the key, `false` on rejection or
+/// network failure.
+pub async fn validate_api_key(provider: String, api_key: String) -> bool {
+    match provider.as_str() {
+        "openai" => mockmate_llm::OpenAiLlm::new(api_key, None)
+            .validate()
+            .await
+            .unwrap_or(false),
+        "anthropic" => mockmate_llm::AnthropicLlm::new(api_key, None)
+            .validate()
+            .await
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
 /// Initialise OpenAI (or OpenAI-compatible) LLM provider.
 /// `base_url` defaults to `https://api.openai.com` when empty.
 pub async fn init_openai_llm(api_key: String, model: String, base_url: String) -> bool {

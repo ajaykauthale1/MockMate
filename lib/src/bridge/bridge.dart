@@ -88,6 +88,19 @@ Future<bool> initElevenlabsTts({
   voiceId: voiceId,
 );
 
+/// Validate a BYOK API key without changing the active provider.
+///
+/// `provider` must be `"openai"` or `"anthropic"`.
+/// Returns `true` if the service accepts the key, `false` on rejection or
+/// network failure.
+Future<bool> validateApiKey({
+  required String provider,
+  required String apiKey,
+}) => RustLib.instance.api.crateBridgeValidateApiKey(
+  provider: provider,
+  apiKey: apiKey,
+);
+
 /// Initialise OpenAI (or OpenAI-compatible) LLM provider.
 /// `base_url` defaults to `https://api.openai.com` when empty.
 Future<bool> initOpenaiLlm({
