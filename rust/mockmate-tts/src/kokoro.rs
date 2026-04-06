@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use ort::{session::Session, value::Tensor};
 use tokio::sync::Mutex;
 
-use mockmate_core::providers::TtsProvider;
+use mockmate_core::providers::{TtsPlaybackEvent, TtsProvider, Viseme};
 
 /// Kokoro-82M ONNX output sample rate.
 pub const SAMPLE_RATE: u32 = 24_000;
@@ -48,6 +48,67 @@ static VOCAB: &[char] = &[
 /// characters not in the training vocab (they are silently skipped).
 fn char_to_token(c: char) -> Option<i64> {
     VOCAB.iter().position(|&v| v == c).map(|i| i as i64)
+}
+
+// ---------------------------------------------------------------------------
+// IPA → Viseme mapping
+// ---------------------------------------------------------------------------
+
+/// Map a single IPA character to a Preston Blair viseme ID.
+///
+/// IDs are consistent with `FftVisemeExtractor`:
+/// - 0  silence / prosodic
+/// - 4  T / D / N / stops
+/// - 6  CH / SH  (affricates + palatal fricatives)
+/// - 7  S / Z  (sibilants + dental/labiodental fricatives)
+/// - 8  R  (rhotics)
+/// - 9  L  (laterals)
+/// - 11 OW  (rounded back vowels)
+/// - 12 AW / ER  (mid-central vowels, schwa)
+/// - 13 AH  (open vowels + high front vowels)
+pub fn ipa_char_to_viseme(c: char) -> u8 {
+    match c {
+        // Silence: pad, spaces, punctuation, prosodic markers, clicks
+        '$' | ' ' | '\n' | '\r' | '\t'
+        | ';' | ':' | ',' | '.' | '!' | '?'
+        | '¡' | '¿' | '—' | '…' | '"' | '«' | '»' | '\u{201C}' | '\u{201D}'
+        | 'ʔ' | 'ʡ' | 'ʕ' | 'ʢ'
+        | 'ˈ' | 'ˌ' | 'ː' | 'ˑ' | 'ʼ'
+        | '↓' | '↑' | '→' | '↗' | '↘'
+        | 'ʴ' | 'ʰ' | 'ʱ' | 'ʲ' | 'ʷ' | 'ˠ' | 'ˤ' | '˞'
+        | 'ǀ' | 'ǁ' | 'ǂ' | 'ǃ'
+        | 'h' | 'ɦ' | 'ɧ' | 'ħ' | 'ʜ' | 'ɥ' => 0,
+
+        // Open vowels (AH, 13)
+        'ɑ' | 'ɐ' | 'ɒ' | 'æ' | 'ʌ' | 'ɪ' | 'i' | 'ɨ' | 'ᵻ'
+        | 'j' => 13,    // palatal approximant – yod, vowel-like
+
+        // Mid / central vowels, schwa (AW / ER, 12)
+        'ə' | 'ɘ' | 'ɚ' | 'ɝ' | 'ɞ' | 'ɛ' | 'e' | 'ɜ' | 'œ' | 'ɶ' | 'ʏ' => 12,
+
+        // Rounded back vowels (OW, 11)
+        'ɔ' | 'o' | 'ø' | 'ɵ' | 'ʉ' | 'ʊ' | 'u' | 'ɤ'
+        | 'w' | 'ʍ' => 11,  // labial-velar approximants – rounded lips
+
+        // Rhotics (R, 8)
+        'ɹ' | 'ɾ' | 'ɻ' | 'ʀ' | 'ʁ' | 'ɽ' => 8,
+
+        // Laterals (L, 9)
+        'l' | 'ɭ' | 'ɬ' | 'ɫ' | 'ɮ' | 'ʟ' | 'ɱ' | 'ʎ' => 9,
+
+        // Affricates + postalveolar / palatal fricatives (CH / SH, 6)
+        'ʧ' | 'ʃ' | 'ç' | 'ɕ' => 6,
+        'ʤ' => 6,   // voiced affricate
+
+        // Sibilants + dental/labiodental fricatives (S / Z, 7)
+        's' | 'z' | 'ʑ' | 'ʐ' | 'ʂ' | 'ʒ'
+        | 'θ' | 'ð'
+        | 'f' | 'v' | 'β' | 'ɸ'
+        | 'χ' | 'ɣ' | 'ⱱ' => 7,
+
+        // Stops, nasals, velars, bilabials → generic consonant (T / D / N, 4)
+        _ => 4,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -110,10 +171,10 @@ impl KokoroTts {
     }
 }
 
-#[async_trait]
-impl TtsProvider for KokoroTts {
-    async fn synthesise(&self, text: &str) -> Result<Vec<u8>> {
-        // ── 1. Phonemise via espeak-ng (blocking subprocess → thread pool) ──
+impl KokoroTts {
+    /// Core synthesis: phonemise → tokenise → ONNX → pack bytes + build visemes.
+    async fn synthesise_inner(&self, text: &str) -> Result<TtsPlaybackEvent> {
+        // ── 1. Phonemise via espeak-ng ────────────────────────────────────────
         let espeak = self.espeak_bin.clone();
         let text_owned = text.to_string();
 
@@ -142,21 +203,27 @@ impl TtsProvider for KokoroTts {
         })
         .await??;
 
-        // ── 2. Tokenise ──────────────────────────────────────────────────────
-        // Wrap with BOS and EOS tokens (both are '$' = 0).
-        let mut tokens: Vec<i64> = Vec::with_capacity(ipa.chars().count() + 2);
-        tokens.push(0); // BOS
-        for c in ipa.chars() {
-            if let Some(t) = char_to_token(c) {
-                tokens.push(t);
+        // ── 2. Build phoneme-viseme list from IPA ─────────────────────────────
+        // Collect (char, viseme_id) pairs, skipping chars not in the token vocab.
+        // We keep all chars (including silence) for timestamp distribution.
+        let phonemes: Vec<(i64, u8)> = {
+            let mut v = Vec::new();
+            for c in ipa.chars() {
+                if let Some(tok) = char_to_token(c) {
+                    v.push((tok, ipa_char_to_viseme(c)));
+                }
             }
-            // Characters not in VOCAB are silently dropped (diacritics, etc.)
-        }
-        tokens.push(0); // EOS
+            v
+        };
 
+        // ── 3. Build token sequence ───────────────────────────────────────────
+        let mut tokens: Vec<i64> = Vec::with_capacity(phonemes.len() + 2);
+        tokens.push(0); // BOS ($)
+        tokens.extend(phonemes.iter().map(|(t, _)| *t));
+        tokens.push(0); // EOS ($)
         let seq_len = tokens.len() as i64;
 
-        // ── 3. ONNX inference ────────────────────────────────────────────────
+        // ── 4. ONNX inference ─────────────────────────────────────────────────
         let mut guard = self.session.lock().await;
 
         let tokens_t =
@@ -172,23 +239,53 @@ impl TtsProvider for KokoroTts {
             "speed"  => speed_t,
         ])?;
 
-        // The model's first (and only) output is the raw waveform.
         let output_name = outputs
             .keys()
             .next()
             .context("kokoro: model produced no outputs")?
             .to_string();
         let (_, audio_view) = outputs[output_name].try_extract_tensor::<f32>()?;
-        let audio: Vec<f32> = audio_view.iter().copied().collect();
+        let audio_samples: Vec<f32> = audio_view.iter().copied().collect();
         drop(outputs);
         drop(guard);
 
-        // ── 4. Pack as f32 LE bytes (TtsProvider contract) ──────────────────
-        let mut bytes = Vec::with_capacity(audio.len() * 4);
-        for s in audio {
-            bytes.extend_from_slice(&s.to_le_bytes());
+        // ── 5. Pack audio as f32 LE bytes ─────────────────────────────────────
+        let mut audio = Vec::with_capacity(audio_samples.len() * 4);
+        for s in &audio_samples {
+            audio.extend_from_slice(&s.to_le_bytes());
         }
-        Ok(bytes)
+
+        // ── 6. Build phoneme-aligned visemes ─────────────────────────────────
+        // Distribute phonemes uniformly across the total audio duration.
+        let visemes = if phonemes.is_empty() {
+            vec![]
+        } else {
+            let total_ms =
+                audio_samples.len() as f32 / SAMPLE_RATE as f32 * 1000.0;
+            let ms_per_phoneme = total_ms / phonemes.len() as f32;
+
+            phonemes
+                .iter()
+                .enumerate()
+                .map(|(i, (_, viseme_id))| Viseme {
+                    id: *viseme_id,
+                    timestamp_ms: (i as f32 * ms_per_phoneme) as u32,
+                })
+                .collect()
+        };
+
+        Ok(TtsPlaybackEvent { audio, visemes })
+    }
+}
+
+#[async_trait]
+impl TtsProvider for KokoroTts {
+    async fn synthesise(&self, text: &str) -> Result<Vec<u8>> {
+        Ok(self.synthesise_inner(text).await?.audio)
+    }
+
+    async fn synthesise_with_visemes(&self, text: &str) -> Result<TtsPlaybackEvent> {
+        self.synthesise_inner(text).await
     }
 }
 
@@ -288,6 +385,91 @@ mod tests {
         assert!((style[0] - 0.0).abs() < f32::EPSILON);
         assert!((style[1] - 1.0).abs() < f32::EPSILON);
         assert!((style[255] - 255.0).abs() < f32::EPSILON);
+    }
+
+    // ── ipa_char_to_viseme ───────────────────────────────────────────────────
+
+    #[test]
+    fn silence_chars_map_to_zero() {
+        for c in ['$', ' ', '.', ',', '!', '?', 'h', 'ʔ', 'ˈ', 'ˌ'] {
+            assert_eq!(ipa_char_to_viseme(c), 0, "char {c:?} should be silence");
+        }
+    }
+
+    #[test]
+    fn open_vowels_map_to_13() {
+        for c in ['ɑ', 'æ', 'ʌ', 'ɪ', 'i'] {
+            assert_eq!(ipa_char_to_viseme(c), 13, "char {c:?} should be AH (13)");
+        }
+    }
+
+    #[test]
+    fn schwa_maps_to_12() {
+        assert_eq!(ipa_char_to_viseme('ə'), 12);
+        assert_eq!(ipa_char_to_viseme('ɛ'), 12);
+        assert_eq!(ipa_char_to_viseme('e'), 12);
+    }
+
+    #[test]
+    fn rounded_vowels_map_to_11() {
+        for c in ['ɔ', 'o', 'ʊ', 'u', 'w'] {
+            assert_eq!(ipa_char_to_viseme(c), 11, "char {c:?} should be OW (11)");
+        }
+    }
+
+    #[test]
+    fn rhotics_map_to_8() {
+        for c in ['ɹ', 'ɾ', 'ʀ'] {
+            assert_eq!(ipa_char_to_viseme(c), 8);
+        }
+    }
+
+    #[test]
+    fn laterals_map_to_9() {
+        for c in ['l', 'ɭ', 'ɫ'] {
+            assert_eq!(ipa_char_to_viseme(c), 9);
+        }
+    }
+
+    #[test]
+    fn affricates_map_to_6() {
+        assert_eq!(ipa_char_to_viseme('ʧ'), 6);
+        assert_eq!(ipa_char_to_viseme('ʃ'), 6);
+        assert_eq!(ipa_char_to_viseme('ʤ'), 6);
+    }
+
+    #[test]
+    fn sibilants_map_to_7() {
+        for c in ['s', 'z', 'f', 'v', 'θ', 'ð'] {
+            assert_eq!(ipa_char_to_viseme(c), 7, "char {c:?} should be S/Z (7)");
+        }
+    }
+
+    #[test]
+    fn unknown_ipa_maps_to_4() {
+        // Generic consonants fall back to stop/nasal bucket
+        assert_eq!(ipa_char_to_viseme('n'), 4);
+        assert_eq!(ipa_char_to_viseme('t'), 4);
+        assert_eq!(ipa_char_to_viseme('k'), 4);
+    }
+
+    #[test]
+    fn viseme_distribution_timing() {
+        // Simulate 10 phonemes over 1000 ms of audio → 100 ms per phoneme
+        let phonemes: Vec<u8> = (0..10).map(|_| 13u8).collect();
+        let total_ms = 1000.0f32;
+        let ms_per_phoneme = total_ms / phonemes.len() as f32;
+        let visemes: Vec<Viseme> = phonemes
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| Viseme {
+                id,
+                timestamp_ms: (i as f32 * ms_per_phoneme) as u32,
+            })
+            .collect();
+        assert_eq!(visemes[0].timestamp_ms, 0);
+        assert_eq!(visemes[1].timestamp_ms, 100);
+        assert_eq!(visemes[9].timestamp_ms, 900);
     }
 
     // ── tokeniser ────────────────────────────────────────────────────────────
