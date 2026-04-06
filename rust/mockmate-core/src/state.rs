@@ -48,6 +48,10 @@ impl AppState {
         *self.mode.lock().await = mode;
     }
 
+    pub async fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
+        *self.llm.write().await = llm;
+    }
+
     pub async fn set_stt(&self, stt: Arc<dyn SttProvider>) {
         *self.stt.write().await = stt;
     }

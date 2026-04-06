@@ -88,6 +88,28 @@ Future<bool> initElevenlabsTts({
   voiceId: voiceId,
 );
 
+/// Initialise OpenAI (or OpenAI-compatible) LLM provider.
+/// `base_url` defaults to `https://api.openai.com` when empty.
+Future<bool> initOpenaiLlm({
+  required String apiKey,
+  required String model,
+  required String baseUrl,
+}) => RustLib.instance.api.crateBridgeInitOpenaiLlm(
+  apiKey: apiKey,
+  model: model,
+  baseUrl: baseUrl,
+);
+
+/// Initialise Anthropic Claude LLM provider (BYOK).
+/// `model` defaults to `claude-haiku-4-5-20251001` when empty.
+Future<bool> initAnthropicLlm({
+  required String apiKey,
+  required String model,
+}) => RustLib.instance.api.crateBridgeInitAnthropicLlm(
+  apiKey: apiKey,
+  model: model,
+);
+
 /// Transcribe f32 LE PCM bytes (16 kHz mono) to text.
 Future<String> transcribeAudio({required List<int> pcmBytes}) =>
     RustLib.instance.api.crateBridgeTranscribeAudio(pcmBytes: pcmBytes);

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1913217984;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1661514601;
 
 // Section: executor
 
@@ -159,6 +159,45 @@ fn wire__crate__bridge__extract_visemes_impl(
         },
     )
 }
+fn wire__crate__bridge__init_anthropic_llm_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "init_anthropic_llm",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_api_key = <String>::sse_decode(&mut deserializer);
+            let api_model = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::bridge::init_anthropic_llm(api_api_key, api_model).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__bridge__init_elevenlabs_tts_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -234,6 +273,47 @@ fn wire__crate__bridge__init_kokoro_tts_impl(
                                 api_espeak_bin,
                             )
                             .await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__init_openai_llm_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "init_openai_llm",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_api_key = <String>::sse_decode(&mut deserializer);
+            let api_model = <String>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::bridge::init_openai_llm(api_api_key, api_model, api_base_url)
+                                .await,
                         )?;
                         Ok(output_ok)
                     })()
@@ -725,18 +805,20 @@ fn pde_ffi_dispatcher_primary_impl(
         1 => wire__crate__bridge__avatar_state_stream_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__bridge__chat_impl(port, ptr, rust_vec_len, data_len),
         3 => wire__crate__bridge__extract_visemes_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__bridge__init_kokoro_tts_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__bridge__init_anthropic_llm_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__bridge__init_kokoro_tts_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__bridge__init_openai_llm_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

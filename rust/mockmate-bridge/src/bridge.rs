@@ -268,6 +268,25 @@ pub async fn init_elevenlabs_tts(api_key: String, voice_id: String) -> bool {
     true
 }
 
+/// Initialise OpenAI (or OpenAI-compatible) LLM provider.
+/// `base_url` defaults to `https://api.openai.com` when empty.
+pub async fn init_openai_llm(api_key: String, model: String, base_url: String) -> bool {
+    let model_opt = if model.is_empty() { None } else { Some(model) };
+    let url_opt = if base_url.is_empty() { None } else { Some(base_url) };
+    let llm = mockmate_llm::OpenAiLlm::with_base_url(api_key, model_opt, url_opt);
+    state().set_llm(Arc::new(llm)).await;
+    true
+}
+
+/// Initialise Anthropic Claude LLM provider (BYOK).
+/// `model` defaults to `claude-haiku-4-5-20251001` when empty.
+pub async fn init_anthropic_llm(api_key: String, model: String) -> bool {
+    let model_opt = if model.is_empty() { None } else { Some(model) };
+    let llm = mockmate_llm::AnthropicLlm::new(api_key, model_opt);
+    state().set_llm(Arc::new(llm)).await;
+    true
+}
+
 // ---------------------------------------------------------------------------
 // Phase 3 — audio pipeline bridge functions
 // ---------------------------------------------------------------------------
