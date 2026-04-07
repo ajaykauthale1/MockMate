@@ -36,7 +36,8 @@
       "Bash(flutter config:*)",
       "Bash(dart analyze:*)",
       "Bash(git merge:*)",
-      "Bash(ls -la /c/workspaces/MockMate/rust/mockmate-*/src/*.rs)"
+      "Bash(ls -la /c/workspaces/MockMate/rust/mockmate-*/src/*.rs)",
+      "Bash(git branch:*)"
     ]
   }
 }
