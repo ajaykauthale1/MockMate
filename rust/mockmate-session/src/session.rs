@@ -230,4 +230,187 @@ mod tests {
         let result = mgr.process_audio(&[0.5f32; 512]).await.unwrap();
         assert_eq!(result.transcript, "swapped");
     }
+
+    // -----------------------------------------------------------------------
+    // Integration: KB content + mode routing into LLM system prompt
+    // -----------------------------------------------------------------------
+
+    use mockmate_core::providers::InteractionMode;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use tokio::sync::Mutex as TokioMutex;
+
+    /// LLM stub that records the system prompt it receives.
+    struct CaptureLlm {
+        captured_system: Arc<TokioMutex<String>>,
+        reply: String,
+    }
+
+    #[async_trait]
+    impl LlmProvider for CaptureLlm {
+        async fn chat(&self, system: &str, _user: &str) -> AResult<mpsc::Receiver<AResult<String>>> {
+            *self.captured_system.lock().await = system.to_string();
+            let (tx, rx) = mpsc::channel(1);
+            let reply = self.reply.clone();
+            tokio::spawn(async move { let _ = tx.send(Ok(reply)).await; });
+            Ok(rx)
+        }
+    }
+
+    /// TTS stub that returns phoneme-driven visemes inline.
+    struct PhonemeTts;
+
+    #[async_trait]
+    impl TtsProvider for PhonemeTts {
+        async fn synthesise(&self, _: &str) -> AResult<Vec<u8>> { Ok(vec![]) }
+
+        async fn synthesise_with_visemes(&self, _: &str) -> AResult<mockmate_core::providers::TtsPlaybackEvent> {
+            Ok(mockmate_core::providers::TtsPlaybackEvent {
+                audio: vec![],
+                visemes: vec![
+                    mockmate_core::providers::Viseme { id: 5, timestamp_ms: 0 },
+                    mockmate_core::providers::Viseme { id: 7, timestamp_ms: 80 },
+                ],
+            })
+        }
+    }
+
+    /// VisemeExtractor stub that counts how many times it was called.
+    struct CountingViseme(Arc<AtomicU32>);
+
+    #[async_trait]
+    impl VisemeExtractor for CountingViseme {
+        async fn extract(&self, _: &[u8]) -> AResult<Vec<Viseme>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![])
+        }
+    }
+
+    #[tokio::test]
+    async fn guide_mode_prompt_contains_kb_content() {
+        let captured = Arc::new(TokioMutex::new(String::new()));
+        let state = make_state(
+            Arc::new(AlwaysSpeechVad),
+            Arc::new(EchoStt("q".into())),
+            Arc::new(CaptureLlm { captured_system: Arc::clone(&captured), reply: "a".into() }),
+            Arc::new(SilentTts),
+            Arc::new(NoViseme),
+        );
+        state.set_knowledge_base("Rust ownership rules".into()).await;
+        // Guide is the default mode — no need to set it.
+
+        SessionManager::new(Arc::clone(&state))
+            .process_audio(&[0.5f32; 512])
+            .await
+            .unwrap();
+
+        let system = captured.lock().await.clone();
+        assert!(system.contains("Guide mode"), "expected Guide mode in prompt");
+        assert!(system.contains("Rust ownership rules"), "expected KB in prompt");
+    }
+
+    #[tokio::test]
+    async fn test_mode_prompt_is_socratic() {
+        let captured = Arc::new(TokioMutex::new(String::new()));
+        let state = make_state(
+            Arc::new(AlwaysSpeechVad),
+            Arc::new(EchoStt("q".into())),
+            Arc::new(CaptureLlm { captured_system: Arc::clone(&captured), reply: "hint".into() }),
+            Arc::new(SilentTts),
+            Arc::new(NoViseme),
+        );
+        state.set_mode(InteractionMode::Test).await;
+
+        SessionManager::new(Arc::clone(&state))
+            .process_audio(&[0.5f32; 512])
+            .await
+            .unwrap();
+
+        let system = captured.lock().await.clone();
+        assert!(system.contains("Test mode"), "expected Test mode in prompt");
+        assert!(
+            system.contains("NEVER give the answer directly"),
+            "expected Socratic instruction in prompt"
+        );
+    }
+
+    #[tokio::test]
+    async fn tts_phoneme_visemes_used_when_available() {
+        let fft_calls = Arc::new(AtomicU32::new(0));
+        let state = make_state(
+            Arc::new(AlwaysSpeechVad),
+            Arc::new(EchoStt("hi".into())),
+            Arc::new(SingleTokenLlm("response".into())),
+            Arc::new(PhonemeTts),
+            Arc::new(CountingViseme(Arc::clone(&fft_calls))),
+        );
+
+        let result = SessionManager::new(state)
+            .process_audio(&[0.5f32; 512])
+            .await
+            .unwrap();
+
+        // Phoneme path: 2 visemes from PhonemeTts, FFT never called
+        assert_eq!(result.visemes.len(), 2);
+        assert_eq!(result.visemes[0].id, 5);
+        assert_eq!(result.visemes[1].id, 7);
+        assert_eq!(fft_calls.load(Ordering::SeqCst), 0, "FFT should not be called when TTS provides visemes");
+    }
+
+    #[tokio::test]
+    async fn fft_fallback_called_when_tts_has_no_visemes() {
+        let fft_calls = Arc::new(AtomicU32::new(0));
+        let state = make_state(
+            Arc::new(AlwaysSpeechVad),
+            Arc::new(EchoStt("hi".into())),
+            Arc::new(SingleTokenLlm("response".into())),
+            Arc::new(SilentTts), // default impl returns empty visemes
+            Arc::new(CountingViseme(Arc::clone(&fft_calls))),
+        );
+
+        SessionManager::new(state)
+            .process_audio(&[0.5f32; 512])
+            .await
+            .unwrap();
+
+        assert_eq!(fft_calls.load(Ordering::SeqCst), 1, "FFT should be called exactly once as fallback");
+    }
+
+    #[tokio::test]
+    async fn mode_switch_between_turns_uses_new_mode() {
+        let captured = Arc::new(TokioMutex::new(Vec::<String>::new()));
+
+        struct MultiCaptureLlm(Arc<TokioMutex<Vec<String>>>);
+        #[async_trait]
+        impl LlmProvider for MultiCaptureLlm {
+            async fn chat(&self, system: &str, _: &str) -> AResult<mpsc::Receiver<AResult<String>>> {
+                self.0.lock().await.push(system.to_string());
+                let (tx, rx) = mpsc::channel(1);
+                tokio::spawn(async move { let _ = tx.send(Ok("ok".to_string())).await; });
+                Ok(rx)
+            }
+        }
+
+        let state = make_state(
+            Arc::new(AlwaysSpeechVad),
+            Arc::new(EchoStt("q".into())),
+            Arc::new(MultiCaptureLlm(Arc::clone(&captured))),
+            Arc::new(SilentTts),
+            Arc::new(NoViseme),
+        );
+        let mgr = SessionManager::new(Arc::clone(&state));
+
+        // Turn 1: Guide
+        mgr.process_audio(&[0.5f32; 512]).await.unwrap();
+
+        // Switch to Test
+        state.set_mode(InteractionMode::Test).await;
+
+        // Turn 2: Test
+        mgr.process_audio(&[0.5f32; 512]).await.unwrap();
+
+        let prompts = captured.lock().await.clone();
+        assert_eq!(prompts.len(), 2);
+        assert!(prompts[0].contains("Guide mode"));
+        assert!(prompts[1].contains("Test mode"));
+    }
 }

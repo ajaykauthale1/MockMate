@@ -201,4 +201,102 @@ mod tests {
         // Should not try to parse as JSON
         assert!(serde_json::from_str::<ChatChunk>(data).is_err());
     }
+
+    // -----------------------------------------------------------------------
+    // HTTP integration tests (wiremock)
+    // -----------------------------------------------------------------------
+
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::{method, path};
+
+    fn sse_body(tokens: &[&str]) -> String {
+        let mut lines: Vec<String> = tokens
+            .iter()
+            .map(|t| {
+                format!(
+                    "data: {{\"choices\":[{{\"delta\":{{\"content\":\"{}\"}}}}]}}\n",
+                    t
+                )
+            })
+            .collect();
+        lines.push("data: [DONE]\n".to_string());
+        lines.join("")
+    }
+
+    #[tokio::test]
+    async fn streams_tokens_from_sse() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(sse_body(&["Hello", " world"]), "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = OpenAiLlm::with_base_url("test-key", None, Some(server.uri()));
+        let mut rx = llm.chat("system", "hello").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["Hello", " world"]);
+    }
+
+    #[tokio::test]
+    async fn http_4xx_returns_err() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&server)
+            .await;
+
+        let llm = OpenAiLlm::with_base_url("bad-key", None, Some(server.uri()));
+        let err = llm.chat("sys", "hi").await.unwrap_err();
+        assert!(err.to_string().contains("401"));
+    }
+
+    #[tokio::test]
+    async fn empty_delta_content_skipped() {
+        let server = MockServer::start().await;
+        // Mixing empty and non-empty content deltas
+        let body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"\"}}]}\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n",
+            "data: [DONE]\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let llm = OpenAiLlm::with_base_url("key", None, Some(server.uri()));
+        let mut rx = llm.chat("sys", "hi").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["hi"]);
+    }
+
+    #[tokio::test]
+    async fn dropped_receiver_does_not_panic() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(sse_body(&["a", "b", "c"]), "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = OpenAiLlm::with_base_url("key", None, Some(server.uri()));
+        let rx = llm.chat("sys", "hi").await.unwrap();
+        drop(rx);
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
 }
