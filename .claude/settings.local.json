@@ -26,7 +26,17 @@
       "Bash(git merge phase/1-sidecar --no-ff -m ':*)",
       "Bash(cargo doc:*)",
       "Bash(grep -r \"pub use\\\\|pub struct Session\\\\|pub fn builder\" /c/workspaces/MockMate/rust/target/.cargo-lock/../../../.cargo/registry/src/*/ort-2.0.0-rc.12/src/lib.rs)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(git merge phase/3-native-audio --no-ff -m ':*)",
+      "Bash(git stash:*)",
+      "Bash(ls C:/workspaces/MockMate/*.yaml)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(cargo check:*)",
+      "Bash(flutter config:*)",
+      "Bash(dart analyze:*)",
+      "Bash(git merge:*)",
+      "Bash(ls -la /c/workspaces/MockMate/rust/mockmate-*/src/*.rs)"
     ]
   }
 }
