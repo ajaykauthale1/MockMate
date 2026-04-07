@@ -1,0 +1,35 @@
+{
+  "id": "valid-parentheses",
+  "title": "Valid Parentheses",
+  "difficulty": "easy",
+  "tags": ["string", "stack"],
+  "description": "Given a string `s` containing just the characters `'('`, `')'`, `'{'`, `'}'`, `'['` and `']'`, determine if the input string is valid.\n\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.",
+  "examples": [
+    { "input": "s = \"()\"",     "output": "true" },
+    { "input": "s = \"()[{}]\"", "output": "true" },
+    { "input": "s = \"(]\"",     "output": "false" },
+    { "input": "s = \"([)]\"",   "output": "false" },
+    { "input": "s = \"{[]}\"",   "output": "true" }
+  ],
+  "constraints": [
+    "1 <= s.length <= 10^4",
+    "s consists of parentheses only '()[]{}'."
+  ],
+  "starter_code": {
+    "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        pass",
+    "javascript": "/**\n * @param {string} s\n * @return {boolean}\n */\nvar isValid = function(s) {\n\n};",
+    "java": "class Solution {\n    public boolean isValid(String s) {\n\n    }\n}",
+    "go": "func isValid(s string) bool {\n\n}",
+    "cpp": "class Solution {\npublic:\n    bool isValid(string s) {\n\n    }\n};"
+  },
+  "hidden_tests": [
+    { "label": "TC1", "stdin": "()",      "expected_stdout": "true" },
+    { "label": "TC2", "stdin": "()[{}]",  "expected_stdout": "true" },
+    { "label": "TC3", "stdin": "(]",      "expected_stdout": "false" },
+    { "label": "TC4", "stdin": "([)]",    "expected_stdout": "false" },
+    { "label": "TC5", "stdin": "{[]}",    "expected_stdout": "true" },
+    { "label": "TC6", "stdin": "",        "expected_stdout": "true" },
+    { "label": "TC7", "stdin": "(((",     "expected_stdout": "false" }
+  ],
+  "solution_notes": "Stack-based O(n) O(n): push open brackets, on close check top matches. Empty stack at end = valid. Edge: odd-length string is always false — can short-circuit."
+}
