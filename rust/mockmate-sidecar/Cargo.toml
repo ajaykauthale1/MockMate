@@ -1,0 +1,10 @@
+[package]
+name = "mockmate-sidecar"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }

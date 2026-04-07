@@ -1285,6 +1285,7 @@ dependencies = [
  "mockmate-core",
  "mockmate-llm",
  "mockmate-session",
+ "mockmate-sidecar",
  "mockmate-tts",
  "mockmate-viseme",
  "serde",
@@ -1335,6 +1336,16 @@ dependencies = [
  "mockmate-viseme",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "mockmate-sidecar"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
  "tokio",
  "tracing",
 ]

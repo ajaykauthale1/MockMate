@@ -145,6 +145,19 @@ Future<String> extractVisemes({required List<int> pcmBytes}) =>
 Future<String> processAudioTurn({required List<int> pcmBytes}) =>
     RustLib.instance.api.crateBridgeProcessAudioTurn(pcmBytes: pcmBytes);
 
+/// Spawn Ollama from [binPath] if not already running. Returns `true` when
+/// healthy within 8 s.
+Future<bool> startOllamaSidecar({required String binPath}) =>
+    RustLib.instance.api.crateBridgeStartOllamaSidecar(binPath: binPath);
+
+/// Kill the sidecar Ollama process if MockMate spawned it.
+Future<void> stopOllamaSidecar() =>
+    RustLib.instance.api.crateBridgeStopOllamaSidecar();
+
+/// Returns `"running"`, `"stopped"`, or `"error:<msg>"`.
+Future<String> getSidecarStatus() =>
+    RustLib.instance.api.crateBridgeGetSidecarStatus();
+
 /// Snapshot of avatar animation state pushed to Flutter on every change.
 class AvatarState {
   /// Current mouth-shape viseme (0 = closed / idle).

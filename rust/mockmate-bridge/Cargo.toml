@@ -18,6 +18,7 @@ mockmate-audio = { path = "../mockmate-audio" }
 mockmate-tts = { path = "../mockmate-tts" }
 mockmate-viseme = { path = "../mockmate-viseme" }
 mockmate-session = { path = "../mockmate-session" }
+mockmate-sidecar = { path = "../mockmate-sidecar" }
 
 [lib]
 name = "mockmate_bridge"

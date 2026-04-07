@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 60735972;
+  int get rustContentHash => 60735999;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -134,6 +134,12 @@ abstract class RustLibApi extends BaseApi {
     required String provider,
     required String apiKey,
   });
+
+  Future<bool> crateBridgeStartOllamaSidecar({required String binPath});
+
+  Future<void> crateBridgeStopOllamaSidecar();
+
+  Future<String> crateBridgeGetSidecarStatus();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -707,6 +713,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     debugName: "validate_api_key",
     argNames: ["provider", "apiKey"],
   );
+
+  @override
+  Future<bool> crateBridgeStartOllamaSidecar({required String binPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(binPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeStartOllamaSidecarConstMeta,
+        argValues: [binPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeStartOllamaSidecarConstMeta =>
+      const TaskConstMeta(debugName: "start_ollama_sidecar", argNames: ["binPath"]);
+
+  @override
+  Future<void> crateBridgeStopOllamaSidecar() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeStopOllamaSidecarConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeStopOllamaSidecarConstMeta =>
+      const TaskConstMeta(debugName: "stop_ollama_sidecar", argNames: []);
+
+  @override
+  Future<String> crateBridgeGetSidecarStatus() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBridgeGetSidecarStatusConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBridgeGetSidecarStatusConstMeta =>
+      const TaskConstMeta(debugName: "get_sidecar_status", argNames: []);
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
