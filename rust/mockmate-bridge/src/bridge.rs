@@ -369,6 +369,28 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 8 — Ollama sidecar bridge functions
+// ---------------------------------------------------------------------------
+
+/// Spawn Ollama from `bin_path` (no-op if already running). Returns `true`
+/// when healthy within 8 s.
+pub async fn start_ollama_sidecar(bin_path: String) -> bool {
+    mockmate_sidecar::start_ollama(&bin_path)
+        .await
+        .unwrap_or(false)
+}
+
+/// Kill the sidecar Ollama process if MockMate spawned it.
+pub async fn stop_ollama_sidecar() {
+    mockmate_sidecar::stop_ollama();
+}
+
+/// Returns `"running"`, `"stopped"`, or `"error:<msg>"`.
+pub async fn get_sidecar_status() -> String {
+    mockmate_sidecar::get_status()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

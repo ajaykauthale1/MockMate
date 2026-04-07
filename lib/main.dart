@@ -8,7 +8,7 @@ import 'src/theme/ske_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
+  await RustLib.init(forceSameCodegenVersion: false);
   await loadKnowledgeBaseAssets();
   runApp(const ProviderScope(child: MockMateApp()));
 }
