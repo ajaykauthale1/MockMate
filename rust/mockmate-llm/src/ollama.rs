@@ -210,4 +210,105 @@ mod tests {
         assert_eq!(llm.base_url, "http://localhost:9999");
         assert_eq!(llm.model, "llama3");
     }
+
+    // -----------------------------------------------------------------------
+    // HTTP integration tests (wiremock)
+    // -----------------------------------------------------------------------
+
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::{method, path};
+
+    /// Build a newline-delimited Ollama chat response with given tokens.
+    /// The last entry has `"done":true` and empty content.
+    fn ndjson_response(tokens: &[&str]) -> String {
+        let mut lines: Vec<String> = tokens
+            .iter()
+            .map(|t| {
+                format!(
+                    r#"{{"message":{{"role":"assistant","content":"{}"}},"done":false}}"#,
+                    t
+                )
+            })
+            .collect();
+        lines.push(r#"{"done":true}"#.to_string());
+        lines.join("\n")
+    }
+
+    #[tokio::test]
+    async fn streams_tokens_from_ndjson() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(ndjson_response(&["Hello", " world"]), "application/x-ndjson"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = OllamaLlm::new(Some(server.uri()), None);
+        let mut rx = llm.chat("system", "hello").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["Hello", " world"]);
+    }
+
+    #[tokio::test]
+    async fn done_true_terminates_stream() {
+        let server = MockServer::start().await;
+        let body = r#"{"message":{"role":"assistant","content":"only"},"done":true}"#;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&server)
+            .await;
+
+        let llm = OllamaLlm::new(Some(server.uri()), None);
+        let mut rx = llm.chat("sys", "hi").await.unwrap();
+        let first = rx.recv().await.unwrap().unwrap();
+        assert_eq!(first, "only");
+        // Stream must terminate — no more tokens
+        assert!(rx.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn empty_content_chunks_skipped() {
+        let server = MockServer::start().await;
+        // Chunk with empty content should not be emitted
+        let body = ndjson_response(&["", "real", ""]);
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+            .mount(&server)
+            .await;
+
+        let llm = OllamaLlm::new(Some(server.uri()), None);
+        let mut rx = llm.chat("sys", "hi").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["real"]);
+    }
+
+    #[tokio::test]
+    async fn dropped_receiver_does_not_panic() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(ndjson_response(&["a", "b", "c"]), "application/json"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = OllamaLlm::new(Some(server.uri()), None);
+        let rx = llm.chat("sys", "hi").await.unwrap();
+        drop(rx);
+        // Give the spawned task time to hit the closed channel without panicking
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
 }
