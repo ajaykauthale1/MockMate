@@ -1,0 +1,30 @@
+{
+  "id": "reverse-linked-list",
+  "title": "Reverse Linked List",
+  "difficulty": "easy",
+  "tags": ["linked-list", "recursion"],
+  "description": "Given the `head` of a singly linked list, reverse the list, and return the reversed list.",
+  "examples": [
+    { "input": "head = [1,2,3,4,5]", "output": "[5,4,3,2,1]" },
+    { "input": "head = [1,2]",       "output": "[2,1]" },
+    { "input": "head = []",          "output": "[]" }
+  ],
+  "constraints": [
+    "The number of nodes in the list is in the range [0, 5000].",
+    "-5000 <= Node.val <= 5000"
+  ],
+  "starter_code": {
+    "python": "# Definition for singly-linked list.\n# class ListNode:\n#     def __init__(self, val=0, next=None):\n#         self.val = val\n#         self.next = next\nclass Solution:\n    def reverseList(self, head: 'ListNode | None') -> 'ListNode | None':\n        pass",
+    "javascript": "/**\n * Definition for singly-linked list.\n * function ListNode(val, next) {\n *     this.val = (val===undefined ? 0 : val)\n *     this.next = (next===undefined ? null : next)\n * }\n */\n/**\n * @param {ListNode} head\n * @return {ListNode}\n */\nvar reverseList = function(head) {\n\n};",
+    "java": "/**\n * Definition for singly-linked list.\n * public class ListNode {\n *     int val;\n *     ListNode next;\n *     ListNode() {}\n *     ListNode(int val) { this.val = val; }\n *     ListNode(int val, ListNode next) { this.val = val; this.next = next; }\n * }\n */\nclass Solution {\n    public ListNode reverseList(ListNode head) {\n\n    }\n}",
+    "go": "/**\n * Definition for singly-linked list.\n * type ListNode struct {\n *     Val int\n *     Next *ListNode\n * }\n */\nfunc reverseList(head *ListNode) *ListNode {\n\n}",
+    "cpp": "/**\n * Definition for singly-linked list.\n * struct ListNode {\n *     int val;\n *     ListNode *next;\n *     ListNode() : val(0), next(nullptr) {}\n *     ListNode(int x) : val(x), next(nullptr) {}\n *     ListNode(int x, ListNode *next) : val(x), next(next) {}\n * };\n */\nclass Solution {\npublic:\n    ListNode* reverseList(ListNode* head) {\n\n    }\n};"
+  },
+  "hidden_tests": [
+    { "label": "TC1", "stdin": "5\n1 2 3 4 5", "expected_stdout": "5 4 3 2 1" },
+    { "label": "TC2", "stdin": "2\n1 2",       "expected_stdout": "2 1" },
+    { "label": "TC3", "stdin": "0\n",           "expected_stdout": "" },
+    { "label": "TC4", "stdin": "1\n42",         "expected_stdout": "42" }
+  ],
+  "solution_notes": "Iterative: three-pointer prev/curr/next O(n) O(1). Recursive: base case null/single node, rewire next.next = curr O(n) O(n) stack. Both are correct — prefer iterative for stack safety."
+}

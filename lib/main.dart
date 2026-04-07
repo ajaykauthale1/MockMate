@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/bridge/frb_generated.dart';
-import 'src/chat/chat_page.dart';
+import 'src/home_screen.dart';
 import 'src/onboarding/onboarding_page.dart';
 import 'src/services/kb_service.dart';
 import 'src/theme/ske_theme.dart';
@@ -21,7 +21,7 @@ class MockMateApp extends StatelessWidget {
     return MaterialApp(
       title: 'MockMate',
       theme: skeuomorphicTheme(),
-      home: const OnboardingPage(nextPage: ChatPage()),
+      home: const OnboardingPage(nextPage: HomeScreen()),
     );
   }
 }
