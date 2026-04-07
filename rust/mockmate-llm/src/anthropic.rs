@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-const API_URL: &str = "https://api.anthropic.com/v1/messages";
+const DEFAULT_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const DEFAULT_MODEL: &str = "claude-haiku-4-5-20251001";
 const DEFAULT_MAX_TOKENS: u32 = 1024;
@@ -17,6 +17,7 @@ pub struct AnthropicLlm {
     api_key: String,
     model: String,
     max_tokens: u32,
+    base_url: String,
 }
 
 impl AnthropicLlm {
@@ -26,11 +27,17 @@ impl AnthropicLlm {
             api_key: api_key.into(),
             model: model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
             max_tokens: DEFAULT_MAX_TOKENS,
+            base_url: DEFAULT_API_URL.to_string(),
         }
     }
 
     pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = max_tokens;
+        self
+    }
+
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
         self
     }
 
@@ -47,7 +54,7 @@ impl AnthropicLlm {
 
         let resp = self
             .client
-            .post(API_URL)
+            .post(&self.base_url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
             .json(&Ping {
@@ -114,7 +121,7 @@ impl LlmProvider for AnthropicLlm {
 
         let resp = self
             .client
-            .post(API_URL)
+            .post(&self.base_url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
             .json(&req)
@@ -221,5 +228,103 @@ mod tests {
         if let Ok(ev) = result {
             assert_ne!(ev.delta.kind, "text_delta");
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // HTTP integration tests (wiremock)
+    // -----------------------------------------------------------------------
+
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::method;
+
+    fn sse_text_delta(text: &str) -> String {
+        format!(
+            "data: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"text_delta\",\"text\":\"{}\"}}}}\n",
+            text
+        )
+    }
+
+    fn anthropic_sse_body(tokens: &[&str]) -> String {
+        let mut body = String::new();
+        body.push_str("data: {\"type\":\"message_start\"}\n\n");
+        for t in tokens {
+            body.push_str(&sse_text_delta(t));
+            body.push('\n');
+        }
+        body.push_str("data: {\"type\":\"message_stop\"}\n\n");
+        body
+    }
+
+    #[tokio::test]
+    async fn streams_tokens_from_anthropic_sse() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(anthropic_sse_body(&["Hello", " world"]), "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = AnthropicLlm::new("test-key", None).with_base_url(server.uri());
+        let mut rx = llm.chat("system", "hello").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["Hello", " world"]);
+    }
+
+    #[tokio::test]
+    async fn non_text_delta_events_ignored() {
+        let server = MockServer::start().await;
+        // Mix in a tool_use_delta — must not appear in output
+        let body = concat!(
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"tool_use_delta\",\"text\":null}}\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n",
+            "data: {\"type\":\"message_stop\"}\n",
+        );
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let llm = AnthropicLlm::new("key", None).with_base_url(server.uri());
+        let mut rx = llm.chat("sys", "hi").await.unwrap();
+        let mut tokens = Vec::new();
+        while let Some(t) = rx.recv().await {
+            tokens.push(t.unwrap());
+        }
+        assert_eq!(tokens, vec!["hi"]);
+    }
+
+    #[tokio::test]
+    async fn http_4xx_returns_err() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&server)
+            .await;
+
+        let llm = AnthropicLlm::new("bad-key", None).with_base_url(server.uri());
+        let err = llm.chat("sys", "hi").await.unwrap_err();
+        assert!(err.to_string().contains("401"));
+    }
+
+    #[tokio::test]
+    async fn dropped_receiver_does_not_panic() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(anthropic_sse_body(&["a", "b", "c"]), "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = AnthropicLlm::new("key", None).with_base_url(server.uri());
+        let rx = llm.chat("sys", "hi").await.unwrap();
+        drop(rx);
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 }
