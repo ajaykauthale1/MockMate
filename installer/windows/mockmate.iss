@@ -15,6 +15,7 @@
 #define AppExeName   "mockmate.exe"
 #define BuildDir     "..\..\build\windows\x64\runner\Release"
 #define EspeakDir    "..\..\resources\espeak-ng"
+#define KokoroDir    "..\..\resources\kokoro"
 
 [Setup]
 AppId={{7A3F2E1D-8B4C-4E6A-9F2B-3D5C8A1E7F2B}
@@ -50,6 +51,9 @@ Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 Source: "{#EspeakDir}\espeak-ng.exe";         DestDir: "{app}\espeak-ng"; Flags: ignoreversion
 Source: "{#EspeakDir}\libespeak-ng.dll";       DestDir: "{app}\espeak-ng"; Flags: ignoreversion
 Source: "{#EspeakDir}\espeak-ng-data\*";       DestDir: "{app}\espeak-ng\espeak-ng-data"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Kokoro TTS model + voice style (bundled — no internet required on first run)
+Source: "{#KokoroDir}\kokoro-v0_19.onnx";     DestDir: "{app}\kokoro"; Flags: ignoreversion
+Source: "{#KokoroDir}\af_heart.bin";           DestDir: "{app}\kokoro"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";        Filename: "{app}\{#AppExeName}"

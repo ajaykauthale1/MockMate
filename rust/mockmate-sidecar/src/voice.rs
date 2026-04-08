@@ -9,7 +9,7 @@
 //! function also checks `PATH` so developer machines with a system install
 //! still work.
 
-use std::io::{Cursor, Write as _};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -20,16 +20,18 @@ use tokio::sync::mpsc;
 // Download URLs
 // ---------------------------------------------------------------------------
 
-/// Kokoro-82M ONNX model (v0.19) — thewh1teagle mirror on GitHub Releases.
+/// Kokoro-82M ONNX model (v0.19 int8) — thewh1teagle mirror on GitHub Releases.
 const KOKORO_ONNX_URL: &str =
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1/kokoro-v0_19.onnx";
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.int8.onnx";
 
-/// Pre-packaged voices ZIP — contains individual `<voice>.bin` files (256 × f32 LE each).
-const VOICES_ZIP_URL: &str =
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1/voices.zip";
+/// Pre-packaged voices JSON — voice embeddings in JSON format.
+const VOICES_JSON_URL: &str =
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.json";
 
-/// Voice to extract from the ZIP.
+/// Voice to extract.
 const VOICE_NAME: &str = "af_heart";
+/// Fallback voice if VOICE_NAME is not found.
+const VOICE_FALLBACK: &str = "af_bella";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -86,7 +88,7 @@ pub async fn ensure_kokoro_assets(
     // ── Voice style ──────────────────────────────────────────────────────────
     if !style_path.exists() {
         emit(&tx, "Downloading voice style…", 0, 0).await;
-        download_voice_style(VOICES_ZIP_URL, VOICE_NAME, &style_path, &tx).await?;
+        download_voice_style(VOICES_JSON_URL, VOICE_NAME, VOICE_FALLBACK, &style_path, &tx).await?;
     } else {
         emit(&tx, "Voice style: already present", 0, 0).await;
     }
@@ -152,10 +154,12 @@ async fn download_with_progress(
     Ok(())
 }
 
-/// Download the voices ZIP, extract `{voice_name}.bin`, save to `dest`.
+/// Download voices.json and extract a 256-f32 style embedding for `voice_name`
+/// (or `fallback` if not found), saving as a 1 024-byte LE binary.
 async fn download_voice_style(
-    zip_url: &str,
+    json_url: &str,
     voice_name: &str,
+    fallback: &str,
     dest: &Path,
     tx: &mpsc::Sender<VoiceSetupProgress>,
 ) -> Result<()> {
@@ -166,12 +170,12 @@ async fn download_voice_style(
     emit(tx, "Downloading voice styles…", 0, 0).await;
 
     let resp = client
-        .get(zip_url)
+        .get(json_url)
         .send()
         .await
-        .with_context(|| format!("GET {zip_url}"))?
+        .with_context(|| format!("GET {json_url}"))?
         .error_for_status()
-        .with_context(|| format!("HTTP error for {zip_url}"))?;
+        .with_context(|| format!("HTTP error for {json_url}"))?;
 
     let total = resp.content_length().unwrap_or(0);
     let mut bytes_done: u64 = 0;
@@ -185,25 +189,31 @@ async fn download_voice_style(
         emit(tx, "Downloading voice styles…", bytes_done, total).await;
     }
 
-    // Extract the target voice bin from the ZIP.
-    let target = format!("{voice_name}.bin");
-    let cursor = Cursor::new(buf);
-    let mut zip = zip::ZipArchive::new(cursor).context("open voices ZIP")?;
-    let mut entry = zip
-        .by_name(&target)
-        .with_context(|| format!("'{target}' not found in voices ZIP"))?;
+    // Parse JSON: { voice: [[[f32; 256]], ...] } — take first slice [0][0].
+    let json: serde_json::Value = serde_json::from_slice(&buf).context("parse voices JSON")?;
+    let voice_data = json.get(voice_name)
+        .or_else(|| json.get(fallback))
+        .with_context(|| format!("voice '{voice_name}' and fallback '{fallback}' not found in voices JSON"))?;
+
+    // Shape [N, 1, 256] — take first element's first row.
+    let floats = voice_data
+        .get(0).context("voices JSON: empty outer array")?
+        .get(0).context("voices JSON: empty middle array")?
+        .as_array().context("voices JSON: innermost value is not an array")?;
 
     anyhow::ensure!(
-        entry.size() == 1024,
-        "unexpected voice style size: expected 1024 bytes, got {}",
-        entry.size()
+        floats.len() == 256,
+        "expected 256 floats per voice style, got {}",
+        floats.len()
     );
 
-    let mut style_bytes = [0u8; 1024];
-    std::io::Read::read_exact(&mut entry, &mut style_bytes)
-        .context("read voice style bytes")?;
+    let mut style_bytes = Vec::with_capacity(1024);
+    for v in floats {
+        let f = v.as_f64().context("voice style: non-numeric value")? as f32;
+        style_bytes.extend_from_slice(&f.to_le_bytes());
+    }
 
-    std::fs::write(dest, style_bytes)
+    std::fs::write(dest, &style_bytes)
         .with_context(|| format!("write {}", dest.display()))?;
 
     Ok(())
