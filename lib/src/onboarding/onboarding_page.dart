@@ -1,17 +1,21 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../bridge/bridge.dart' as bridge;
 import '../services/config_service.dart';
 import '../services/kb_service.dart';
 import 'model_catalog.dart';
 import 'ollama_installer.dart';
 
-/// 5-step onboarding wizard.
+/// 6-step onboarding wizard.
 ///
 /// Step 1: LLM mode selection (Local / Cloud BYOK)
 /// Step 2: Ollama detection / auto-start / install
 /// Step 3: Model catalog selection + pull
-/// Step 4: Dependency progress (piper + whisper downloads)
-/// Step 5: Finish → nextPage
+/// Step 4: LLM model download progress
+/// Step 5: Voice (Kokoro) asset download
+/// Step 6: Finish → nextPage
 class OnboardingPage extends StatefulWidget {
   final Widget nextPage;
   const OnboardingPage({super.key, required this.nextPage});
@@ -20,17 +24,22 @@ class OnboardingPage extends StatefulWidget {
   State<OnboardingPage> createState() => _OnboardingPageState();
 }
 
-enum _Step { llmMode, ollamaDetect, modelCatalog, installProgress, done }
+enum _Step { llmMode, ollamaDetect, modelCatalog, installProgress, voiceSetup, done }
 
 class _OnboardingPageState extends State<OnboardingPage> {
   _Step _step = _Step.llmMode;
   String _llmMode = 'local'; // 'local' | 'openai' | 'anthropic'
   String? _selectedModel;
   String _statusMsg = '';
-  double _progress = 0;
   List<String> _pullLog = [];
   bool _busy = false;
   String? _ollamaBinPath;
+
+  // Voice setup state
+  String _voiceStep = '';
+  double? _voiceProgress; // null = indeterminate
+  String? _voiceError;
+  bool _voiceDone = false;
 
   // ── Step 1 ──────────────────────────────────────────────────────────────
 
@@ -74,8 +83,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
       });
       await _detectOllama();
     } else {
-      // BYOK path — skip to finish (settings screen handles key entry)
-      _finish();
+      // BYOK path — skip LLM model pull, go straight to voice setup
+      await _startVoiceSetup();
     }
   }
 
@@ -89,7 +98,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
-    // Not running — try to find binary and start sidecar
     final bin = await OllamaInstaller.detectBinPath();
     if (bin != null) {
       setState(() => _statusMsg = 'Starting Ollama…');
@@ -101,7 +109,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
       }
     }
 
-    // Not installed
     setState(() { _busy = false; });
   }
 
@@ -114,7 +121,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ],
       );
     }
-    // Ollama not found — show install button
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -133,9 +139,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             _ollamaBinPath = binPath;
             setState(() => _step = _Step.modelCatalog);
           },
-          onError: (msg) {
-            setState(() => _statusMsg = msg);
-          },
+          onError: (msg) => setState(() => _statusMsg = msg),
         ),
       ],
     );
@@ -186,7 +190,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
-    // Save config
+    // Save LLM config then proceed to voice setup.
     final cfg = AppConfig(
       llmMode: _llmMode,
       ollamaBinPath: _ollamaBinPath ?? '',
@@ -194,7 +198,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
     await ConfigService.save(cfg);
     await loadKnowledgeBaseAssets();
-    _finish();
+    await _startVoiceSetup();
   }
 
   // ── Step 4 ──────────────────────────────────────────────────────────────
@@ -240,7 +244,111 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  // ── Routing ─────────────────────────────────────────────────────────────
+  // ── Step 5 — Voice setup ─────────────────────────────────────────────────
+
+  Future<void> _startVoiceSetup() async {
+    setState(() {
+      _step = _Step.voiceSetup;
+      _voiceStep = 'Setting up voice…';
+      _voiceProgress = null;
+      _voiceError = null;
+      _voiceDone = false;
+    });
+
+    final appDir = await getApplicationSupportDirectory();
+    final assetDir = '${appDir.path}/kokoro';
+    // espeak-ng is bundled alongside the app executable.
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final espeakDir = '$exeDir/espeak-ng';
+
+    await for (final event in bridge.ensureVoiceAssets(
+      assetDir: assetDir,
+      espeakDir: espeakDir,
+    )) {
+      if (!mounted) return;
+      if (event.done) {
+        if (event.error.isNotEmpty) {
+          setState(() { _voiceError = event.error; _voiceDone = true; });
+        } else {
+          // Persist Kokoro paths so next launch skips the download.
+          final cfg = await ConfigService.load();
+          await ConfigService.save(cfg.copyWith(
+            kokoroModelPath: '$assetDir/kokoro-v0_19.onnx',
+            kokoroStylePath: '$assetDir/af_heart.bin',
+            espeakBinPath: '$espeakDir/${Platform.isWindows ? 'espeak-ng.exe' : 'espeak-ng'}',
+          ));
+          setState(() { _voiceDone = true; });
+          _finish();
+        }
+        return;
+      }
+
+      final total = event.bytesTotal.toInt();
+      final done = event.bytesDone.toInt();
+      setState(() {
+        _voiceStep = event.step;
+        _voiceProgress = (total > 0) ? done / total : null;
+      });
+    }
+  }
+
+  Widget _buildVoiceSetupStep() {
+    if (_voiceError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StatusRow(
+            icon: Icons.volume_off,
+            label: 'Voice setup failed',
+            loading: false,
+            color: Colors.orange,
+          ),
+          const SizedBox(height: 8),
+          Text(_voiceError!,
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 24),
+          const Text(
+              'MockMate will work without voice — you can retry from Settings.'),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _finish,
+            child: const Text('Continue without voice'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: _startVoiceSetup,
+            child: const Text('Retry'),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Setting up voice', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        const Text('Downloading Kokoro TTS model (~82 MB). This is a one-time step.'),
+        const SizedBox(height: 24),
+        _StatusRow(
+          icon: Icons.record_voice_over,
+          label: _voiceStep,
+          loading: !_voiceDone,
+        ),
+        const SizedBox(height: 12),
+        LinearProgressIndicator(value: _voiceProgress),
+        if (_voiceProgress != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${(_voiceProgress! * 100).toStringAsFixed(0)}%',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Routing ──────────────────────────────────────────────────────────────
 
   void _finish() {
     if (!mounted) return;
@@ -263,7 +371,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
               _StepIndicator(
-                steps: const ['Mode', 'Ollama', 'Model', 'Installing'],
+                steps: const ['Mode', 'Ollama', 'Model', 'Installing', 'Voice'],
                 current: _step.index,
               ),
               const SizedBox(height: 32),
@@ -285,6 +393,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
         return _buildModelCatalogStep();
       case _Step.installProgress:
         return _buildInstallProgressStep();
+      case _Step.voiceSetup:
+        return _buildVoiceSetupStep();
       case _Step.done:
         return const _StatusRow(
             icon: Icons.check_circle, label: 'All set!', loading: false);

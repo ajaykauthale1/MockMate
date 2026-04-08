@@ -26,10 +26,16 @@ mod sidecar_integration {
     }
 
     /// Smoke test: start_ollama with a bad path must not panic, just return false.
+    ///
+    /// Skipped when Ollama is already running on the default port (common on dev
+    /// machines) because `start_ollama` correctly short-circuits to `Ok(true)`
+    /// in that case without attempting to spawn anything.
     #[tokio::test]
     async fn start_ollama_bad_path_returns_false() {
+        if crate::is_ollama_running(crate::OLLAMA_BASE_URL).await {
+            return;
+        }
         let result = crate::start_ollama("/nonexistent/ollama").await;
-        // spawn will fail → Ok(false) or Err → unwrap_or(false)
         assert!(!result.unwrap_or(false));
     }
 }
