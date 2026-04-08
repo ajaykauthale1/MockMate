@@ -1,6 +1,7 @@
 ; MockMate — Inno Setup script
 ; Packages the Flutter Windows build into a one-click installer.
-; Does NOT bundle Ollama, models, or language runtimes — handled by first-run wizard.
+; Bundles: espeak-ng (phoneme engine for Kokoro TTS).
+; Does NOT bundle Ollama or AI models — handled by first-run wizard.
 ;
 ; Build prerequisites:
 ;   1. flutter build windows --release
@@ -13,6 +14,7 @@
 #define AppURL       "https://github.com/akauthale/MockMate"
 #define AppExeName   "mockmate.exe"
 #define BuildDir     "..\..\build\windows\x64\runner\Release"
+#define EspeakDir    "..\..\resources\espeak-ng"
 
 [Setup]
 AppId={{7A3F2E1D-8B4C-4E6A-9F2B-3D5C8A1E7F2B}
@@ -44,6 +46,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Flutter app bundle (entire Release folder)
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; espeak-ng phoneme engine (required by Kokoro TTS)
+Source: "{#EspeakDir}\espeak-ng.exe";         DestDir: "{app}\espeak-ng"; Flags: ignoreversion
+Source: "{#EspeakDir}\libespeak-ng.dll";       DestDir: "{app}\espeak-ng"; Flags: ignoreversion
+Source: "{#EspeakDir}\espeak-ng-data\*";       DestDir: "{app}\espeak-ng\espeak-ng-data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#AppName}";        Filename: "{app}\{#AppExeName}"
