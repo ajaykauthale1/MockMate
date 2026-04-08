@@ -255,10 +255,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _voiceDone = false;
     });
 
-    final appDir = await getApplicationSupportDirectory();
-    final assetDir = '${appDir.path}/kokoro';
-    // espeak-ng is bundled alongside the app executable.
+    // kokoro + espeak-ng are both bundled alongside the app executable.
     final exeDir = File(Platform.resolvedExecutable).parent.path;
+    // Use the bundled kokoro dir — no download needed on installed builds.
+    // Falls back to AppData if the bundled dir is missing (dev / portable).
+    final bundledKokoro = Directory('$exeDir/kokoro');
+    final String assetDir;
+    if (bundledKokoro.existsSync()) {
+      assetDir = bundledKokoro.path;
+    } else {
+      final appDir = await getApplicationSupportDirectory();
+      assetDir = '${appDir.path}/kokoro';
+    }
     final espeakDir = '$exeDir/espeak-ng';
 
     await for (final event in bridge.ensureVoiceAssets(
@@ -328,7 +336,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       children: [
         Text('Setting up voice', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
-        const Text('Downloading Kokoro TTS model (~82 MB). This is a one-time step.'),
+        const Text('Initialising voice engine. This only takes a moment.'),
         const SizedBox(height: 24),
         _StatusRow(
           icon: Icons.record_voice_over,
