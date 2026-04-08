@@ -111,6 +111,20 @@ class _MockApi extends RustLibApi {
 
   @override
   Future<bool> crateBridgeIsAudioPlaying() async => false;
+
+  @override
+  Stream<VoiceSetupEvent> crateBridgeEnsureVoiceAssets({
+    required String assetDir,
+    required String espeakDir,
+  }) => Stream.fromIterable([
+    VoiceSetupEvent(
+      step: 'done',
+      bytesDone: BigInt.zero,
+      bytesTotal: BigInt.zero,
+      done: true,
+      error: '',
+    ),
+  ]);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -139,12 +153,14 @@ void main() {
     expect(kModelCatalog.every((m) => m.vramGb > 0), isTrue);
   });
 
-  testWidgets('selecting cloud mode skips to home', (tester) async {
+  testWidgets('selecting cloud mode advances to voice setup step', (tester) async {
     await tester.pumpWidget(_buildWizard());
     await tester.tap(find.text('Cloud API (BYOK)'));
     await tester.pump();
     await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(find.text('Home'), findsOneWidget);
+    await tester.pump(); // triggers _startVoiceSetup → setState(_step = voiceSetup)
+    await tester.pump(); // rebuild with new step
+    // Voice setup screen should be visible (async download hasn't completed yet)
+    expect(find.text('Setting up voice'), findsOneWidget);
   });
 }

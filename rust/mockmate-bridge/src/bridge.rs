@@ -459,6 +459,97 @@ pub async fn get_sidecar_status() -> String {
     mockmate_sidecar::get_status()
 }
 
+// ---------------------------------------------------------------------------
+// Phase 8 — Kokoro voice asset download
+// ---------------------------------------------------------------------------
+
+/// Progress event pushed to Flutter during Kokoro asset download.
+pub struct VoiceSetupEvent {
+    /// Human-readable step label.
+    pub step: String,
+    /// Bytes downloaded so far (0 = not yet started or step has no size).
+    pub bytes_done: u64,
+    /// Expected total bytes (0 = unknown).
+    pub bytes_total: u64,
+    /// `true` on the final event — either success or failure.
+    pub done: bool,
+    /// Non-empty only on the final failure event.
+    pub error: String,
+}
+
+/// Ensure Kokoro TTS assets are present, streaming progress to Flutter.
+///
+/// `asset_dir`  — where to store the ONNX model + voice style (app support dir).
+/// `espeak_dir` — where to look for the bundled espeak-ng binary.
+///
+/// On success the final event has `done=true` and `error=""`.
+/// On failure the final event has `done=true` and a non-empty `error`.
+pub async fn ensure_voice_assets(
+    asset_dir: String,
+    espeak_dir: String,
+    sink: StreamSink<VoiceSetupEvent>,
+) {
+    use mockmate_sidecar::VoiceSetupProgress;
+    use tokio::sync::mpsc;
+
+    let (tx, mut rx) = mpsc::channel::<VoiceSetupProgress>(32);
+    let sink = Arc::new(sink);
+    let sink2 = Arc::clone(&sink);
+
+    // Forward progress events from the download task to Flutter.
+    let fwd = tokio::spawn(async move {
+        while let Some(p) = rx.recv().await {
+            let _ = sink2.add(VoiceSetupEvent {
+                step: p.step,
+                bytes_done: p.bytes_done,
+                bytes_total: p.bytes_total,
+                done: false,
+                error: String::new(),
+            });
+        }
+    });
+
+    let result = mockmate_sidecar::ensure_kokoro_assets(
+        std::path::Path::new(&asset_dir),
+        std::path::Path::new(&espeak_dir),
+        tx,
+    )
+    .await;
+
+    // Wait for the forwarder to drain before sending the terminal event.
+    let _ = fwd.await;
+
+    match result {
+        Ok(paths) => {
+            // Activate TTS immediately so the user doesn't need to restart.
+            if let Ok(tts) = mockmate_tts::KokoroTts::new(
+                paths.model.to_str().unwrap_or(""),
+                paths.style.to_str().unwrap_or(""),
+                paths.espeak_bin.to_str().unwrap_or(""),
+            ) {
+                state().set_tts(Arc::new(tts)).await;
+                tracing::info!("Kokoro TTS activated after asset download");
+            }
+            let _ = sink.add(VoiceSetupEvent {
+                step: "Voice setup complete".to_string(),
+                bytes_done: 0,
+                bytes_total: 0,
+                done: true,
+                error: String::new(),
+            });
+        }
+        Err(e) => {
+            let _ = sink.add(VoiceSetupEvent {
+                step: String::new(),
+                bytes_done: 0,
+                bytes_total: 0,
+                done: true,
+                error: e.to_string(),
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
