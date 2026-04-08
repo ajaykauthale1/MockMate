@@ -33,9 +33,11 @@ mod sidecar_integration {
     #[tokio::test]
     async fn start_ollama_bad_path_returns_false() {
         if crate::is_ollama_running(crate::OLLAMA_BASE_URL).await {
+            // Ollama already up — the "bad path" code path is unreachable.
             return;
         }
         let result = crate::start_ollama("/nonexistent/ollama").await;
+        // spawn will fail → Ok(false) or Err → unwrap_or(false)
         assert!(!result.unwrap_or(false));
     }
 }

@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `avatar_sink`, `push_avatar`, `spawn_viseme_playback`, `state`
+// These functions are ignored because they are not marked as `pub`: `audio_player_cell`, `avatar_sink`, `get_or_init_player`, `push_avatar`, `spawn_viseme_playback`, `state`
 
 /// Subscribe to avatar state events.
 ///
@@ -135,6 +135,21 @@ Future<Uint8List> synthesiseText({required String text}) =>
 /// Returns JSON-serialised `Vec<Viseme>`, or `"[]"` on error.
 Future<String> extractVisemes({required List<int> pcmBytes}) =>
     RustLib.instance.api.crateBridgeExtractVisemes(pcmBytes: pcmBytes);
+
+/// Play f32 LE PCM bytes (Kokoro 24 kHz) through the default output device.
+///
+/// Returns `true` if the samples were successfully enqueued.  Returns `false`
+/// if the audio player could not be initialised (e.g. no output device).
+/// The call returns immediately — playback happens asynchronously.
+Future<bool> playAudio({required List<int> pcmBytes}) =>
+    RustLib.instance.api.crateBridgePlayAudio(pcmBytes: pcmBytes);
+
+/// Stop any in-progress playback by draining the queue.
+Future<void> stopAudio() => RustLib.instance.api.crateBridgeStopAudio();
+
+/// Returns `true` while the audio queue is non-empty (i.e. audio is playing).
+Future<bool> isAudioPlaying() =>
+    RustLib.instance.api.crateBridgeIsAudioPlaying();
 
 /// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
 /// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
