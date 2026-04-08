@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:mockmate/src/bridge/bridge.dart';
 import 'package:mockmate/src/bridge/frb_generated.dart';
 import 'package:mockmate/src/onboarding/model_catalog.dart';
 import 'package:mockmate/src/onboarding/onboarding_page.dart';
@@ -103,7 +106,6 @@ class _MockApi extends RustLibApi {
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 Widget _buildWizard() {
-  RustLib.initMock(api: _MockApi());
   return const ProviderScope(
     child: MaterialApp(
       home: OnboardingPage(nextPage: Scaffold(body: Text('Home'))),
@@ -112,6 +114,8 @@ Widget _buildWizard() {
 }
 
 void main() {
+  setUpAll(() => RustLib.initMock(api: _MockApi()));
+
   testWidgets('wizard shows LLM mode step first', (tester) async {
     await tester.pumpWidget(_buildWizard());
     expect(find.text('How do you want to run the AI?'), findsOneWidget);

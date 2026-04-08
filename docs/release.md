@@ -44,7 +44,21 @@ Fix any failures before continuing.
 
 ---
 
-## 3. Build the Flutter Windows release
+## 3. Build the Rust bridge
+
+Must be done before every Flutter build (and after any Rust code change):
+
+```sh
+cargo build --release --manifest-path rust/mockmate-bridge/Cargo.toml
+```
+
+Output: `rust/mockmate-bridge/target/release/mockmate_bridge.dll`
+
+Flutter does **not** build Rust automatically — if the DLL is missing, `flutter build` will fail.
+
+---
+
+## 4. Build the Flutter Windows release
 
 ```sh
 flutter build windows --release
@@ -54,7 +68,7 @@ Output: `build\windows\x64\runner\Release\`
 
 ---
 
-## 4. Build the installer
+## 5. Build the installer
 
 ```sh
 iscc installer\windows\mockmate.iss
@@ -64,7 +78,7 @@ Output: `installer\windows\output\MockMateSetup-<version>.exe`
 
 ---
 
-## 5. Smoke-test the installer
+## 6. Smoke-test the installer
 
 1. Run `MockMateSetup-<version>.exe` on a clean machine (or VM).
 2. Complete the onboarding wizard end-to-end.
@@ -73,7 +87,7 @@ Output: `installer\windows\output\MockMateSetup-<version>.exe`
 
 ---
 
-## 6. Tag and push
+## 7. Tag and push
 
 ```sh
 git tag v1.2.0
@@ -82,7 +96,7 @@ git push origin main --tags
 
 ---
 
-## 7. Publish the release
+## 8. Publish the release
 
 1. Go to **GitHub → Releases → Draft a new release**.
 2. Select the tag `v1.2.0`.
