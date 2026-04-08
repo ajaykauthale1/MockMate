@@ -103,6 +103,16 @@ class _MockApi extends RustLibApi {
       false;
 
   @override
+  Future<bool> crateBridgePlayAudio({required List<int> pcmBytes}) async =>
+      false;
+
+  @override
+  Future<void> crateBridgeStopAudio() async {}
+
+  @override
+  Future<bool> crateBridgeIsAudioPlaying() async => false;
+
+  @override
   Stream<VoiceSetupEvent> crateBridgeEnsureVoiceAssets({
     required String assetDir,
     required String espeakDir,

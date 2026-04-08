@@ -1,12 +1,14 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::frb_generated::StreamSink;
+use mockmate_audio::AudioPlayer;
 use mockmate_core::{
     prompt::build_system_prompt,
     providers::{InteractionMode, Viseme},
     state::AppState,
 };
 use mockmate_llm::OllamaLlm;
+use mockmate_tts::kokoro::SAMPLE_RATE as KOKORO_SAMPLE_RATE;
 use mockmate_viseme::FftVisemeExtractor;
 
 // ---------------------------------------------------------------------------
@@ -119,6 +121,34 @@ fn spawn_viseme_playback(visemes: Vec<Viseme>) {
 // ---------------------------------------------------------------------------
 
 static APP_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
+
+// ---------------------------------------------------------------------------
+// Persistent audio output player (Kokoro → 24 kHz).
+// Lazily initialised on first `play_audio` call so the UI is never blocked
+// waiting for the device to open.
+// ---------------------------------------------------------------------------
+
+static AUDIO_PLAYER: OnceLock<Mutex<Option<Arc<AudioPlayer>>>> = OnceLock::new();
+
+fn audio_player_cell() -> &'static Mutex<Option<Arc<AudioPlayer>>> {
+    AUDIO_PLAYER.get_or_init(|| Mutex::new(None))
+}
+
+fn get_or_init_player() -> Option<Arc<AudioPlayer>> {
+    let mut guard = audio_player_cell().lock().unwrap();
+    if guard.is_none() {
+        match AudioPlayer::new(KOKORO_SAMPLE_RATE) {
+            Ok(p) => {
+                tracing::info!("AudioPlayer initialised at {} Hz", KOKORO_SAMPLE_RATE);
+                *guard = Some(Arc::new(p));
+            }
+            Err(e) => {
+                tracing::error!("AudioPlayer init failed: {e}");
+            }
+        }
+    }
+    guard.as_ref().map(Arc::clone)
+}
 
 fn state() -> &'static Arc<AppState> {
     APP_STATE.get_or_init(|| {
@@ -332,6 +362,37 @@ pub async fn extract_visemes(pcm_bytes: Vec<u8>) -> String {
     }
 }
 
+/// Play f32 LE PCM bytes (Kokoro 24 kHz) through the default output device.
+///
+/// Returns `true` if the samples were successfully enqueued.  Returns `false`
+/// if the audio player could not be initialised (e.g. no output device).
+/// The call returns immediately — playback happens asynchronously.
+pub async fn play_audio(pcm_bytes: Vec<u8>) -> bool {
+    tokio::task::spawn_blocking(move || {
+        match get_or_init_player() {
+            Some(player) => { player.enqueue_f32_pcm(&pcm_bytes); true }
+            None => false,
+        }
+    })
+    .await
+    .unwrap_or(false)
+}
+
+/// Stop any in-progress playback by draining the queue.
+pub async fn stop_audio() {
+    if let Some(player) = get_or_init_player() {
+        player.clear();
+    }
+}
+
+/// Returns `true` while the audio queue is non-empty (i.e. audio is playing).
+pub async fn is_audio_playing() -> bool {
+    match audio_player_cell().lock().unwrap().as_ref() {
+        Some(p) => p.is_playing(),
+        None => false,
+    }
+}
+
 /// Run the full audio turn pipeline: VAD → STT → LLM → TTS → Viseme.
 /// Returns JSON: `{ transcript, response, visemes }` or `{ error }`.
 ///
@@ -351,6 +412,13 @@ pub async fn process_audio_turn(pcm_bytes: Vec<u8>) -> String {
     let mgr = SessionManager::new(Arc::clone(state()));
     match mgr.process_audio(&samples).await {
         Ok(r) => {
+            // Play synthesised audio through the output device.
+            if !r.audio.is_empty() {
+                if let Some(player) = get_or_init_player() {
+                    player.enqueue_f32_pcm(&r.audio);
+                }
+            }
+
             spawn_viseme_playback(r.visemes.clone());
 
             let visemes_json =
