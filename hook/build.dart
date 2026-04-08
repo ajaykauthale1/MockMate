@@ -46,8 +46,8 @@ Future<void> main(List<String> args) async {
 
     // ── 2. Resolve output library path ────────────────────────────────────────
     final releaseSubdir = rustTarget != null
-        ? 'mockmate-bridge/target/$rustTarget/release/'
-        : 'mockmate-bridge/target/release/';
+        ? 'target/$rustTarget/release/'
+        : 'target/release/';
 
     final libUri = rustRoot.resolve('$releaseSubdir${_libFileName(os)}');
 
