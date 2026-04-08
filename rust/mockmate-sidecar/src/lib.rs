@@ -1,8 +1,12 @@
+pub mod voice;
+pub use voice::{ensure_kokoro_assets, KokoroPaths, VoiceSetupProgress};
+
 use std::process::{Child, Command};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-const OLLAMA_BASE_URL: &str = "http://localhost:11434";
+pub(crate) const OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
 
 static CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 

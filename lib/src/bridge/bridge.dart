@@ -145,8 +145,8 @@ Future<String> extractVisemes({required List<int> pcmBytes}) =>
 Future<String> processAudioTurn({required List<int> pcmBytes}) =>
     RustLib.instance.api.crateBridgeProcessAudioTurn(pcmBytes: pcmBytes);
 
-/// Spawn Ollama from [binPath] if not already running. Returns `true` when
-/// healthy within 8 s.
+/// Spawn Ollama from `bin_path` (no-op if already running). Returns `true`
+/// when healthy within 8 s.
 Future<bool> startOllamaSidecar({required String binPath}) =>
     RustLib.instance.api.crateBridgeStartOllamaSidecar(binPath: binPath);
 
@@ -157,6 +157,21 @@ Future<void> stopOllamaSidecar() =>
 /// Returns `"running"`, `"stopped"`, or `"error:<msg>"`.
 Future<String> getSidecarStatus() =>
     RustLib.instance.api.crateBridgeGetSidecarStatus();
+
+/// Ensure Kokoro TTS assets are present, streaming progress to Flutter.
+///
+/// `asset_dir`  — where to store the ONNX model + voice style (app support dir).
+/// `espeak_dir` — where to look for the bundled espeak-ng binary.
+///
+/// On success the final event has `done=true` and `error=""`.
+/// On failure the final event has `done=true` and a non-empty `error`.
+Stream<VoiceSetupEvent> ensureVoiceAssets({
+  required String assetDir,
+  required String espeakDir,
+}) => RustLib.instance.api.crateBridgeEnsureVoiceAssets(
+  assetDir: assetDir,
+  espeakDir: espeakDir,
+);
 
 /// Snapshot of avatar animation state pushed to Flutter on every change.
 class AvatarState {
@@ -187,4 +202,49 @@ class AvatarState {
           visemeId == other.visemeId &&
           isListening == other.isListening &&
           isSpeaking == other.isSpeaking;
+}
+
+/// Progress event pushed to Flutter during Kokoro asset download.
+class VoiceSetupEvent {
+  /// Human-readable step label.
+  final String step;
+
+  /// Bytes downloaded so far (0 = not yet started or step has no size).
+  final BigInt bytesDone;
+
+  /// Expected total bytes (0 = unknown).
+  final BigInt bytesTotal;
+
+  /// `true` on the final event — either success or failure.
+  final bool done;
+
+  /// Non-empty only on the final failure event.
+  final String error;
+
+  const VoiceSetupEvent({
+    required this.step,
+    required this.bytesDone,
+    required this.bytesTotal,
+    required this.done,
+    required this.error,
+  });
+
+  @override
+  int get hashCode =>
+      step.hashCode ^
+      bytesDone.hashCode ^
+      bytesTotal.hashCode ^
+      done.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VoiceSetupEvent &&
+          runtimeType == other.runtimeType &&
+          step == other.step &&
+          bytesDone == other.bytesDone &&
+          bytesTotal == other.bytesTotal &&
+          done == other.done &&
+          error == other.error;
 }
