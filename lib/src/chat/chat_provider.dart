@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../audio/audio_provider.dart';
 import '../bridge/bridge.dart' as bridge;
@@ -43,15 +45,17 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
       ChatMessage(role: MessageRole.assistant, text: response),
     ]);
 
-    // Synthesise speech and extract visemes for avatar animation.
-    // Stub TTS returns empty bytes → visemes will be "[]" → avatar stays closed.
-    // Real animation kicks in once Piper/ElevenLabs is initialised.
+    // Synthesise speech, play it, and extract visemes for avatar animation.
     final pcm = await bridge.synthesiseText(text: response);
+    if (pcm.isNotEmpty) {
+      // Fire-and-forget — audio plays asynchronously while visemes are computed.
+      unawaited(bridge.playAudio(pcmBytes: pcm.toList()));
+    }
     final visemesJson =
         await bridge.extractVisemes(pcmBytes: pcm.toList());
     ref.read(pendingVisemesProvider.notifier).state = visemesJson;
 
-    // If no visemes (stub TTS), go idle immediately.
+    // If no visemes (no TTS), go idle immediately.
     if (visemesJson == '[]') {
       ref.read(audioStateProvider.notifier).state = AudioState.idle;
     }
