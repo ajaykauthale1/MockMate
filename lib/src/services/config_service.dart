@@ -8,6 +8,11 @@ class AppConfig {
   final String ollamaModel;
   final String whisperBinPath;
   final String whisperModelPath;
+  // Kokoro TTS paths (active TTS provider).
+  final String kokoroModelPath;
+  final String kokoroStylePath;
+  final String espeakBinPath;
+  // Legacy Piper fields — read-only for backward compat with old configs.
   final String piperBinPath;
   final String piperModelPath;
 
@@ -17,6 +22,9 @@ class AppConfig {
     this.ollamaModel = 'gemma3:4b',
     this.whisperBinPath = '',
     this.whisperModelPath = '',
+    this.kokoroModelPath = '',
+    this.kokoroStylePath = '',
+    this.espeakBinPath = '',
     this.piperBinPath = '',
     this.piperModelPath = '',
   });
@@ -27,6 +35,9 @@ class AppConfig {
         ollamaModel: j['ollama_model'] as String? ?? 'gemma3:4b',
         whisperBinPath: j['whisper_bin_path'] as String? ?? '',
         whisperModelPath: j['whisper_model_path'] as String? ?? '',
+        kokoroModelPath: j['kokoro_model_path'] as String? ?? '',
+        kokoroStylePath: j['kokoro_style_path'] as String? ?? '',
+        espeakBinPath: j['espeak_bin_path'] as String? ?? '',
         piperBinPath: j['piper_bin_path'] as String? ?? '',
         piperModelPath: j['piper_model_path'] as String? ?? '',
       );
@@ -37,6 +48,9 @@ class AppConfig {
         'ollama_model': ollamaModel,
         'whisper_bin_path': whisperBinPath,
         'whisper_model_path': whisperModelPath,
+        'kokoro_model_path': kokoroModelPath,
+        'kokoro_style_path': kokoroStylePath,
+        'espeak_bin_path': espeakBinPath,
         'piper_bin_path': piperBinPath,
         'piper_model_path': piperModelPath,
       };
@@ -47,6 +61,9 @@ class AppConfig {
     String? ollamaModel,
     String? whisperBinPath,
     String? whisperModelPath,
+    String? kokoroModelPath,
+    String? kokoroStylePath,
+    String? espeakBinPath,
     String? piperBinPath,
     String? piperModelPath,
   }) =>
@@ -56,6 +73,9 @@ class AppConfig {
         ollamaModel: ollamaModel ?? this.ollamaModel,
         whisperBinPath: whisperBinPath ?? this.whisperBinPath,
         whisperModelPath: whisperModelPath ?? this.whisperModelPath,
+        kokoroModelPath: kokoroModelPath ?? this.kokoroModelPath,
+        kokoroStylePath: kokoroStylePath ?? this.kokoroStylePath,
+        espeakBinPath: espeakBinPath ?? this.espeakBinPath,
         piperBinPath: piperBinPath ?? this.piperBinPath,
         piperModelPath: piperModelPath ?? this.piperModelPath,
       );

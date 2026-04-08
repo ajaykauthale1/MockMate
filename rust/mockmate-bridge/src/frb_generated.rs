@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 60735999;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1009250593;
 
 // Section: executor
 
@@ -151,6 +151,42 @@ fn wire__crate__bridge__extract_visemes_impl(
                         let output_ok = Result::<_, ()>::Ok(
                             crate::bridge::extract_visemes(api_pcm_bytes).await,
                         )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__get_sidecar_status_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_sidecar_status",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok =
+                            Result::<_, ()>::Ok(crate::bridge::get_sidecar_status().await)?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -439,6 +475,42 @@ fn wire__crate__bridge__init_whisper_stt_impl(
         },
     )
 }
+fn wire__crate__bridge__is_audio_playing_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "is_audio_playing",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok =
+                            Result::<_, ()>::Ok(crate::bridge::is_audio_playing().await)?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__bridge__load_knowledge_base_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -549,6 +621,43 @@ fn wire__crate__bridge__ollama_pull_model_impl(
         },
     )
 }
+fn wire__crate__bridge__play_audio_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "play_audio",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_pcm_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok =
+                            Result::<_, ()>::Ok(crate::bridge::play_audio(api_pcm_bytes).await)?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__bridge__process_audio_turn_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -616,6 +725,118 @@ fn wire__crate__bridge__set_interaction_mode_impl(
                     (move || async move {
                         let output_ok = Result::<_, ()>::Ok({
                             crate::bridge::set_interaction_mode(api_is_test).await;
+                        })?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__start_ollama_sidecar_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_ollama_sidecar",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bin_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::bridge::start_ollama_sidecar(api_bin_path).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__stop_audio_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_audio",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok({
+                            crate::bridge::stop_audio().await;
+                        })?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__bridge__stop_ollama_sidecar_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_ollama_sidecar",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok({
+                            crate::bridge::stop_ollama_sidecar().await;
                         })?;
                         Ok(output_ok)
                     })()
@@ -740,118 +961,6 @@ fn wire__crate__bridge__validate_api_key_impl(
     )
 }
 
-fn wire__crate__bridge__start_ollama_sidecar_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "start_ollama_sidecar",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_bin_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, ()>(
-                    (move || async move {
-                        let output_ok = Result::<_, ()>::Ok(
-                            crate::bridge::start_ollama_sidecar(api_bin_path).await,
-                        )?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__bridge__stop_ollama_sidecar_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "stop_ollama_sidecar",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, ()>(
-                    (move || async move {
-                        let output_ok = Result::<_, ()>::Ok({
-                            crate::bridge::stop_ollama_sidecar().await;
-                        })?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__bridge__get_sidecar_status_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_sidecar_status",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, ()>(
-                    (move || async move {
-                        let output_ok =
-                            Result::<_, ()>::Ok(crate::bridge::get_sidecar_status().await)?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-
 // Section: dart2rust
 
 impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
@@ -956,24 +1065,27 @@ fn pde_ffi_dispatcher_primary_impl(
         1 => wire__crate__bridge__avatar_state_stream_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__bridge__chat_impl(port, ptr, rust_vec_len, data_len),
         3 => wire__crate__bridge__extract_visemes_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__bridge__init_anthropic_llm_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__bridge__init_kokoro_tts_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__bridge__init_openai_llm_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__bridge__validate_api_key_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__bridge__get_sidecar_status_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__bridge__init_anthropic_llm_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__bridge__init_elevenlabs_tts_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__bridge__init_kokoro_tts_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__bridge__init_openai_llm_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__bridge__init_piper_tts_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__bridge__init_silero_vad_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__bridge__init_whisper_stt_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__bridge__is_audio_playing_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__bridge__load_knowledge_base_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__bridge__ollama_health_check_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__bridge__ollama_pull_model_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__bridge__play_audio_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__bridge__process_audio_turn_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__bridge__set_interaction_mode_impl(port, ptr, rust_vec_len, data_len),
         19 => wire__crate__bridge__start_ollama_sidecar_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__bridge__stop_ollama_sidecar_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__bridge__get_sidecar_status_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__bridge__stop_audio_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__bridge__stop_ollama_sidecar_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__bridge__synthesise_text_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__bridge__transcribe_audio_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__bridge__validate_api_key_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
