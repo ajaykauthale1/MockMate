@@ -29,6 +29,14 @@ Future<void> setInteractionMode({required bool isTest}) =>
 Future<bool> ollamaHealthCheck() =>
     RustLib.instance.api.crateBridgeOllamaHealthCheck();
 
+/// Stream LLM tokens one-by-one to Flutter as they are generated.
+///
+/// Each emitted value is a raw token string.  The stream closes when generation
+/// finishes.  On error a single `"\nerror: <msg>"` token is emitted then the
+/// stream closes.
+Stream<String> chatStream({required String userMessage}) =>
+    RustLib.instance.api.crateBridgeChatStream(userMessage: userMessage);
+
 /// Send a user message and get the full LLM response using the current KB + mode.
 Future<String> chat({required String userMessage}) =>
     RustLib.instance.api.crateBridgeChat(userMessage: userMessage);
