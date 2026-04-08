@@ -101,6 +101,16 @@ class _MockApi extends RustLibApi {
   Future<bool> crateBridgeValidateApiKey(
           {required String provider, required String apiKey}) async =>
       false;
+
+  @override
+  Future<bool> crateBridgePlayAudio({required List<int> pcmBytes}) async =>
+      false;
+
+  @override
+  Future<void> crateBridgeStopAudio() async {}
+
+  @override
+  Future<bool> crateBridgeIsAudioPlaying() async => false;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
