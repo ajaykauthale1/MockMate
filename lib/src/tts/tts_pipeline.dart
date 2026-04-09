@@ -39,8 +39,9 @@ String _cleanForTts(String text) {
     RegExp(r'"([^"]{1,60})"'),
     (m) => ', ${m.group(1)!}, ',
   );
-  // Strip any remaining bare quotes so espeak-ng doesn't pause on them.
-  t = t.replaceAll(RegExp(r"[\"']"), '');
+  // Strip remaining bare double quotes (lone " after phrase extraction).
+  // Leave single quotes — they're contractions (don't, it's) that espeak needs.
+  t = t.replaceAll('"', ' ');
 
   // ── Technical term dictionary ─────────────────────────────────────────────
   // Rewrite terms to a form espeak-ng phonemises correctly.

@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use ort::{session::Session, value::Tensor};
+use ort::{execution_providers::CPU as CpuEp, session::Session, value::Tensor};
 use tokio::sync::Mutex;
 
 use mockmate_core::providers::{TtsPlaybackEvent, TtsProvider, Viseme};
@@ -144,7 +144,11 @@ impl KokoroTts {
         espeak_bin: &str,
         speed: f32,
     ) -> Result<Self> {
+        // Pin to CPU: Kokoro is lightweight (~82 M params) and runs fast on CPU.
+        // Keeping it off the GPU avoids VRAM contention with the Ollama LLM.
         let session = Session::builder()?
+            .with_execution_providers([CpuEp::default().build()])
+            .map_err(|e| anyhow::anyhow!("kokoro: CPU EP: {e}"))?
             .commit_from_file(model_path)
             .context("kokoro: failed to load ONNX model")?;
 
@@ -170,7 +174,11 @@ impl KokoroTts {
         espeak_bin: &str,
         speed: f32,
     ) -> Result<Self> {
+        // Pin to CPU: Kokoro is lightweight (~82 M params) and runs fast on CPU.
+        // Keeping it off the GPU avoids VRAM contention with the Ollama LLM.
         let session = Session::builder()?
+            .with_execution_providers([CpuEp::default().build()])
+            .map_err(|e| anyhow::anyhow!("kokoro: CPU EP: {e}"))?
             .commit_from_file(model_path)
             .context("kokoro: failed to load ONNX model")?;
 
