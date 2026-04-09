@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../audio/audio_provider.dart';
 import '../bridge/bridge.dart' as bridge;
 import '../chat/chat_provider.dart';
+import '../tts/tts_pipeline.dart';
 import '../services/kb_service.dart';
 import 'models/evaluation_report.dart';
 import 'models/execution_result.dart';
@@ -162,9 +164,7 @@ class InterviewNotifier extends Notifier<InterviewState> {
     final q = state.question;
     if (q == null) return;
 
-    // Load question as KB (no solution notes)
-    final kbContent = _buildQuestionKb(q);
-    await bridge.loadKnowledgeBase(text: kbContent);
+    await bridge.loadKnowledgeBase(text: _buildQuestionKb(q));
     await bridge.setInteractionMode(isTest: false);
 
     state = state.copyWith(
@@ -178,39 +178,64 @@ class InterviewNotifier extends Notifier<InterviewState> {
 
     _startTicker();
 
-    // Send hidden setup message → get opening from AI
     final setupMsg =
         '${_conductor.buildInterviewerPrompt(q)}\n\nNow greet the candidate and present the question. Be concise.';
-    final opening = await bridge.chat(userMessage: setupMsg);
 
+    // Hidden user prompt + empty assistant placeholder for streaming.
     state = state.copyWith(
       messages: [
-        InterviewMessage(
-            role: MessageRole.user, text: setupMsg, hidden: true),
-        InterviewMessage(role: MessageRole.assistant, text: opening),
+        InterviewMessage(role: MessageRole.user, text: setupMsg, hidden: true),
+        InterviewMessage(role: MessageRole.assistant, text: ''),
       ],
       aiThinking: false,
     );
+
+    await _streamAndSpeak(setupMsg);
   }
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
+
     state = state.copyWith(
       messages: [
         ...state.messages,
         InterviewMessage(role: MessageRole.user, text: text),
+        InterviewMessage(role: MessageRole.assistant, text: ''),
       ],
       aiThinking: true,
     );
 
-    final response = await bridge.chat(userMessage: text);
-    state = state.copyWith(
-      messages: [
-        ...state.messages,
-        InterviewMessage(role: MessageRole.assistant, text: response),
-      ],
-      aiThinking: false,
-    );
+    await _streamAndSpeak(text);
+  }
+
+  /// Stream LLM tokens, update the last assistant message in real-time,
+  /// and pipe tokens through [TtsPipeline] for sentence-level audio synthesis.
+  Future<void> _streamAndSpeak(String userMessage) async {
+    ref.read(audioStateProvider.notifier).state = AudioState.speaking;
+
+    final synthQueue = StreamController<String>();
+    final synthDone = TtsPipeline.run(synthQueue.stream);
+
+    await for (final token in bridge.chatStream(userMessage: userMessage)) {
+      if (token.startsWith('\nerror:')) break;
+
+      // Append token to last assistant message.
+      final msgs = state.messages.toList();
+      final last = msgs.last;
+      msgs[msgs.length - 1] = InterviewMessage(
+        role: last.role,
+        text: last.text + token,
+        hidden: last.hidden,
+      );
+      state = state.copyWith(messages: msgs, aiThinking: false);
+
+      synthQueue.add(token);
+    }
+
+    await synthQueue.close();
+    await synthDone;
+
+    ref.read(audioStateProvider.notifier).state = AudioState.idle;
   }
 
   Future<void> submitCode() async {

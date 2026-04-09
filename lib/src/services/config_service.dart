@@ -89,6 +89,15 @@ class ConfigService {
     return File('${dir.path}/$_fileName');
   }
 
+  static Future<bool> hasConfig() async {
+    try {
+      final f = await _file();
+      return f.existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<AppConfig> load() async {
     try {
       final f = await _file();
