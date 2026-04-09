@@ -13,11 +13,49 @@ String _cleanForTts(String text) {
     (m) => m.group(2)!,
   );
 
-  // ── Markdown / formatting ─────────────────────────────────────────────────
-  t = t.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m.group(1)!);
-  t = t.replaceAll(RegExp(r'[*_`~]+'), '');
+  // ── Literal escape sequences (model sometimes outputs \n \t as text) ──────
+  t = t.replaceAll(r'\n', ' ').replaceAll(r'\t', ' ').replaceAll(r'\r', ' ');
+
+  // ── Fenced code blocks → spoken label ────────────────────────────────────
+  t = t.replaceAll(
+    RegExp(r'```[^\n]*\n[\s\S]*?```'),
+    ', here is a code snippet, ',
+  );
+
+  // ── Markdown structure ────────────────────────────────────────────────────
+  // Headings: ### Heading → Heading
   t = t.replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '');
+  // Horizontal rules
+  t = t.replaceAll(RegExp(r'^\s*[-*_]{3,}\s*$', multiLine: true), '');
+  // Table separator rows (|---|---|) and table cells → strip entirely
+  t = t.replaceAll(RegExp(r'^\s*\|[-|\s:]+\|\s*$', multiLine: true), '');
+  t = t.replaceAllMapped(RegExp(r'^\s*\|(.+)\|\s*$', multiLine: true),
+      (m) => m.group(1)!.split('|').map((c) => c.trim()).join(', '));
+  // Task list checkboxes: - [ ] item / - [x] item → item
+  t = t.replaceAll(RegExp(r'^\s*-\s+\[[ xX]\]\s+', multiLine: true), '');
+  // Unordered bullets: "- item" / "• item" / "* item" → item
   t = t.replaceAll(RegExp(r'^\s*[-•*]\s+', multiLine: true), '');
+  // Ordered lists: "1. item" / "2) item" → item
+  t = t.replaceAll(RegExp(r'^\s*\d+[.)]\s+', multiLine: true), '');
+  // Blockquotes
+  t = t.replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '');
+  // HTML inline tags that small models sometimes emit
+  t = t.replaceAll(RegExp(r'<[^>]{1,40}>'), '');
+
+  // ── Inline formatting ─────────────────────────────────────────────────────
+  // Inline code: `bracket_map` → "bracket map" (underscores → spaces)
+  t = t.replaceAllMapped(
+    RegExp(r'`([^`\n]+)`'),
+    (m) => m.group(1)!.replaceAll('_', ' ').replaceAll('-', ' '),
+  );
+  // Markdown links
+  t = t.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m.group(1)!);
+  // Bold / italic / strikethrough markers — unwrap content
+  t = t.replaceAllMapped(RegExp(r'\*{1,3}([^*\n]+)\*{1,3}'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'_{1,2}([^_\n]+)_{1,2}'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'~~([^~\n]+)~~'), (m) => m.group(1)!);
+  // Any remaining stray marker characters
+  t = t.replaceAll(RegExp(r'[*_`~]+'), '');
 
   // ── URLs / emails ─────────────────────────────────────────────────────────
   t = t.replaceAll(RegExp(r'https?://\S+'), '');
@@ -33,13 +71,14 @@ String _cleanForTts(String text) {
     RegExp(r"(?<!\w)'([A-Za-z])'(?!\w)"),
     (m) => 'the letter ${m.group(1)!.toUpperCase()}',
   );
-  // Double-quoted phrase → comma-isolated for prosodic emphasis.
-  // e.g. "new approach" → , new approach,
+  // Double-quoted phrase → strip quotes, keep content as-is.
+  // Previously inserted commas here but that caused unwanted pauses inside
+  // short phrases like "Two Sum" (the comma split them into separate ONNX calls).
   t = t.replaceAllMapped(
     RegExp(r'"([^"]{1,60})"'),
-    (m) => ', ${m.group(1)!}, ',
+    (m) => m.group(1)!,
   );
-  // Strip remaining bare double quotes (lone " after phrase extraction).
+  // Strip remaining bare double quotes.
   // Leave single quotes — they're contractions (don't, it's) that espeak needs.
   t = t.replaceAll('"', ' ');
 
@@ -85,10 +124,6 @@ String _cleanForTts(String text) {
   for (final entry in _techTerms.entries) {
     t = t.replaceAll(RegExp(entry.key), entry.value);
   }
-
-  // ── "Thanks" fix — espeak-ng splits the final /s/ as a separate phoneme ───
-  t = t.replaceAll(RegExp(r'\bThanks\b'), 'Thank you');
-  t = t.replaceAll(RegExp(r'\bthanks\b'), 'thank you');
 
   // ── Superscripts (standalone) ─────────────────────────────────────────────
   t = t.replaceAll('²', ' squared').replaceAll('³', ' cubed');
@@ -179,14 +214,19 @@ bool _hasOpenHint(String buf) {
   return !_completeHint.hasMatch(buf.substring(lastOpen));
 }
 
+/// True when [buf] has an unclosed code fence (odd number of ``` markers).
+/// In that case we must not flush — the closing fence hasn't arrived yet.
+bool _insideCodeFence(String buf) {
+  return RegExp(r'```').allMatches(buf).length.isOdd;
+}
+
 /// Flush only at natural speech boundaries so Kokoro has full prosodic context.
 ///
-/// Splitting at commas/colons inserts a silent gap at each chunk boundary
-/// (Kokoro adds an end-of-utterance tail), which sounds like an unnatural pause.
 /// We flush only at: sentence end, paragraph break, or a safety limit that
 /// prevents espeak-ng / Kokoro token overflow (~500 phonemes ≈ 450 chars).
 bool _shouldFlush(String buf) {
   if (_hasOpenHint(buf)) return false;
+  if (_insideCodeFence(buf)) return false;        // wait for closing ```
   if (buf.contains('\n\n')) return true;          // paragraph break
   if (_sentenceBoundary.hasMatch(buf)) return true;
   if (buf.length >= 450) return true;              // safety: MAX_TOKENS guard
@@ -267,9 +307,14 @@ Future<void> run(Stream<String> tokens) async {
     tryFlush();
   }
 
-  // Flush any trailing text.
+  // Flush any trailing text — split by sentence so no single chunk is huge.
   if (wordBuf.isNotEmpty) {
-    chunkController.add(wordBuf.toString());
+    final trailing = wordBuf.toString();
+    final sentences = trailing.split(_sentenceBoundary);
+    for (final s in sentences) {
+      final t = s.trim();
+      if (t.isNotEmpty) chunkController.add(t);
+    }
   }
 
   await chunkController.close();

@@ -18,6 +18,7 @@ pub fn build_system_prompt(mode: InteractionMode, kb: &str) -> String {
   <rule>Keep answers focused and practical. Use bullet points or numbered steps when listing concepts.</rule>
   <rule>Do not fabricate information. Stick to the knowledge base content.</rule>
   <rule>For technical terms, product names, or acronyms that a text-to-speech engine might mispronounce, wrap them using [word](/phonetic/) where phonetic is a natural English respelling. Examples: [Kubernetes](/koo ber net eez/), [PostgreSQL](/post gres Q L/), [O(1)](/O of one/). Use this only for genuinely ambiguous terms, not ordinary words.</rule>
+  <rule>Write in plain, natural spoken English. Never use literal escape sequences like \n or \t — use real line breaks if needed. Avoid markdown symbols such as **, *, #, __, or ~~. If you include code, wrap it in a fenced code block with triple backticks; do not inline code in your prose.</rule>
 </instructions>
 {kb_section}
 </system>"#
@@ -33,6 +34,7 @@ pub fn build_system_prompt(mode: InteractionMode, kb: &str) -> String {
   <rule>Keep your responses short — one or two sentences maximum per turn.</rule>
   <rule>Use the knowledge base only to verify correctness internally; do not quote it directly to the candidate.</rule>
   <rule>For technical terms, product names, or acronyms that a text-to-speech engine might mispronounce, wrap them using [word](/phonetic/) where phonetic is a natural English respelling. Examples: [Kubernetes](/koo ber net eez/), [PostgreSQL](/post gres Q L/), [O(1)](/O of one/). Use this only for genuinely ambiguous terms, not ordinary words.</rule>
+  <rule>Write in plain, natural spoken English. Never use literal escape sequences like \n or \t — use real line breaks if needed. Avoid markdown symbols such as **, *, #, __, or ~~. If you include code, wrap it in a fenced code block with triple backticks; do not inline code in your prose.</rule>
 </instructions>
 {kb_section}
 </system>"#
