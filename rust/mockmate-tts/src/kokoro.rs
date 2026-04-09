@@ -132,9 +132,9 @@ pub struct KokoroTts {
 }
 
 impl KokoroTts {
-    /// Load with default speed (0.85) and a single voice style.
+    /// Load with default speed (1.0) and a single voice style.
     pub fn new(model_path: &str, style_path: &str, espeak_bin: &str) -> Result<Self> {
-        Self::with_speed(model_path, style_path, espeak_bin, 0.85)
+        Self::with_speed(model_path, style_path, espeak_bin, 0.9)
     }
 
     /// Load with custom speed multiplier.
@@ -343,12 +343,12 @@ impl KokoroTts {
             .context("kokoro: model produced no outputs")?
             .to_string();
         let (_, audio_view) = outputs[output_name].try_extract_tensor::<f32>()?;
-        // Boost volume: Kokoro outputs are quiet (~0.1 peak); normalise to ~0.8.
-        const GAIN: f32 = 7.0;
-        let audio_samples: Vec<f32> = audio_view
-            .iter()
-            .map(|s| (s * GAIN).clamp(-1.0, 1.0))
-            .collect();
+        // Normalise to 0.75 peak so volume is consistent regardless of content.
+        // Peak-based gain avoids the hard clipping that a fixed multiplier causes.
+        let raw: Vec<f32> = audio_view.iter().copied().collect();
+        let peak = raw.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        let gain = if peak > 1e-6 { 0.45 / peak } else { 1.0 };
+        let audio_samples: Vec<f32> = raw.iter().map(|s| s * gain).collect();
         drop(outputs);
         drop(guard);
 

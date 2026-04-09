@@ -17,6 +17,7 @@ pub fn build_system_prompt(mode: InteractionMode, kb: &str) -> String {
   <rule>If the answer is not in the knowledge base, say "I don't have that in the loaded material" and suggest the candidate add it.</rule>
   <rule>Keep answers focused and practical. Use bullet points or numbered steps when listing concepts.</rule>
   <rule>Do not fabricate information. Stick to the knowledge base content.</rule>
+  <rule>For technical terms, product names, or acronyms that a text-to-speech engine might mispronounce, wrap them using [word](/phonetic/) where phonetic is a natural English respelling. Examples: [Kubernetes](/koo ber net eez/), [PostgreSQL](/post gres Q L/), [O(1)](/O of one/). Use this only for genuinely ambiguous terms, not ordinary words.</rule>
 </instructions>
 {kb_section}
 </system>"#
@@ -31,6 +32,7 @@ pub fn build_system_prompt(mode: InteractionMode, kb: &str) -> String {
   <rule>If the candidate says "I don't know", break the concept into smaller sub-questions to scaffold their thinking.</rule>
   <rule>Keep your responses short — one or two sentences maximum per turn.</rule>
   <rule>Use the knowledge base only to verify correctness internally; do not quote it directly to the candidate.</rule>
+  <rule>For technical terms, product names, or acronyms that a text-to-speech engine might mispronounce, wrap them using [word](/phonetic/) where phonetic is a natural English respelling. Examples: [Kubernetes](/koo ber net eez/), [PostgreSQL](/post gres Q L/), [O(1)](/O of one/). Use this only for genuinely ambiguous terms, not ordinary words.</rule>
 </instructions>
 {kb_section}
 </system>"#
