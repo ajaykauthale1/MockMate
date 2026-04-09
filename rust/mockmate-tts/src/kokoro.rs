@@ -244,6 +244,23 @@ impl KokoroTts {
         })
     }
 
+    /// Apply Misaki's IPA normalisation so phoneme tokens match Kokoro training.
+    ///
+    /// Misaki post-processes espeak-ng `en-us` IPA output with these mappings:
+    /// diphthongs collapse to their single Kokoro uppercase tokens, and
+    /// affricates are consolidated to precomposed IPA chars.
+    fn misaki_normalize(ipa: &str) -> String {
+        // Multi-char replacements MUST precede single-char ones to avoid
+        // consuming part of a pair before the pair match runs.
+        ipa.replace("eɪ", "A")   // day, say, make, face
+           .replace("oʊ", "O")   // go, know, code, both
+           .replace("aɪ", "I")   // I, my, time, write
+           .replace("aʊ", "W")   // now, how, out, cloud
+           .replace("ɔɪ", "Y")   // boy, choice, oil
+           .replace("dʒ", "ʤ")  // job, just → single precomposed char
+           .replace("tʃ", "ʧ")  // check, change → single precomposed char
+    }
+
     /// Core synthesis: phonemise → tokenise → ONNX → pack bytes + build visemes.
     async fn synthesise_inner(&self, text: &str) -> Result<TtsPlaybackEvent> {
         // ── 1. Phonemise via espeak-ng ────────────────────────────────────────
@@ -260,7 +277,9 @@ impl KokoroTts {
 
             eprintln!("[TTS-RUST] espeak bin={espeak:?} data={data_dir:?}");
             let mut cmd = Command::new(&espeak);
-            cmd.args(["--ipa", "-q", "--stdin"]);
+            // -v en-us: American English voice — clearer consonants, correct
+            // stress patterns, and diphthong sequences that match Kokoro training.
+            cmd.args(["--ipa", "-q", "--stdin", "-v", "en-us"]);
             if let Some(ref data) = data_dir {
                 let path_arg = format!("--path={}", data.display());
                 eprintln!("[TTS-RUST] passing {path_arg:?}");
@@ -298,6 +317,9 @@ impl KokoroTts {
             Ok(String::from_utf8_lossy(&out.stdout).into_owned())
         })
         .await??;
+
+        // Apply Misaki diphthong + affricate normalization before tokenising.
+        let ipa = Self::misaki_normalize(&ipa);
 
         tracing::debug!("kokoro: phoneme count={}", ipa.chars().filter(|c| *c != '\n' && *c != ' ').count());
 
