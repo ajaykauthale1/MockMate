@@ -301,9 +301,9 @@ pub async fn init_silero_vad(model_path: String) -> bool {
 
 /// Initialise Kokoro-82M TTS (ONNX-native, no subprocess for inference).
 ///
-/// * `model_path`  — path to `kokoro-v0_19.onnx`
-/// * `style_path`  — raw binary file of exactly 1 024 bytes (256 × f32 LE),
-///                   one speaker embedding extracted from `voices.bin`
+/// * `model_path`  — path to `kokoro-v1.0.onnx`
+/// * `style_path`  — raw binary file of 522 240 bytes (510 × 256 × f32 LE),
+///                   speaker embeddings extracted from `voices-v1.0.bin`
 /// * `espeak_bin`  — path to the `espeak-ng` executable (used for phonemisation)
 pub async fn init_kokoro_tts(model_path: String, style_path: String, espeak_bin: String) -> bool {
     match mockmate_tts::KokoroTts::new(&model_path, &style_path, &espeak_bin) {

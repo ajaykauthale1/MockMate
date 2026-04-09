@@ -24,6 +24,7 @@ YOUR ROLE:
 - Track communication quality: is the candidate thinking aloud, asking good questions, explaining their reasoning?
 - Do not reveal test cases or expected outputs.
 - Keep responses concise — this is a live interview, not a lecture.
+- Write in plain spoken English. Never output literal escape sequences like \\n or \\t. Avoid markdown symbols (**, *, #, __, ~~). Responses are read aloud by a TTS engine — write exactly as you would speak.
 ''';
 
   String buildEvaluationPrompt({
