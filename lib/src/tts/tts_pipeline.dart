@@ -26,6 +26,22 @@ String _cleanForTts(String text) {
   // ── Unicode paren normalisation (LLM fullwidth forms) ─────────────────────
   t = t.replaceAll('（', '(').replaceAll('）', ')');
 
+  // ── Quoted text: emphasis & clarity ──────────────────────────────────────
+  // Single-quoted single char 'X' → "the letter X" (e.g. 'S', 'n')
+  // Must run before the generic single-quote stripper so we capture it first.
+  t = t.replaceAllMapped(
+    RegExp(r"(?<!\w)'([A-Za-z])'(?!\w)"),
+    (m) => 'the letter ${m.group(1)!.toUpperCase()}',
+  );
+  // Double-quoted phrase → comma-isolated for prosodic emphasis.
+  // e.g. "new approach" → , new approach,
+  t = t.replaceAllMapped(
+    RegExp(r'"([^"]{1,60})"'),
+    (m) => ', ${m.group(1)!}, ',
+  );
+  // Strip any remaining bare quotes so espeak-ng doesn't pause on them.
+  t = t.replaceAll(RegExp(r"[\"']"), '');
+
   // ── Technical term dictionary ─────────────────────────────────────────────
   // Rewrite terms to a form espeak-ng phonemises correctly.
   const _techTerms = {
@@ -146,33 +162,33 @@ String _cleanForTts(String text) {
   return t;
 }
 
-final _sentenceBoundary = RegExp(r'[.!?]\s');
+// Sentence end: period/exclamation/question followed by whitespace or EOL.
+final _sentenceBoundary = RegExp(r'[.!?](?:\s|$)', multiLine: true);
 
-// Commas, semicolons, colons — phrase-level pauses that espeak-ng honours.
+// Phrase-level boundary used only as a last-resort split point.
 final _phraseBoundary = RegExp(r'[,;:]\s');
 
 // Matches a complete phonetic hint: [word](/phonetic/).
 final _completeHint = RegExp(r'\[[^\]]+\]\(/[^)]+/\)');
 
 /// True when [buf] contains an open [ that has not yet been closed by /).
-/// Prevents flushing a buffer while a cross-token phonetic hint is incomplete.
 bool _hasOpenHint(String buf) {
   final lastOpen = buf.lastIndexOf('[');
   if (lastOpen < 0) return false;
   return !_completeHint.hasMatch(buf.substring(lastOpen));
 }
 
-/// Returns true when [buf] has accumulated a phrase worth synthesising.
-/// Longer thresholds (~350 chars / 25 words) give Kokoro more prosodic context,
-/// producing smoother, less robotic delivery.
+/// Flush only at natural speech boundaries so Kokoro has full prosodic context.
+///
+/// Splitting at commas/colons inserts a silent gap at each chunk boundary
+/// (Kokoro adds an end-of-utterance tail), which sounds like an unnatural pause.
+/// We flush only at: sentence end, paragraph break, or a safety limit that
+/// prevents espeak-ng / Kokoro token overflow (~500 phonemes ≈ 450 chars).
 bool _shouldFlush(String buf) {
-  // Never flush while a phonetic hint spans a token boundary.
   if (_hasOpenHint(buf)) return false;
+  if (buf.contains('\n\n')) return true;          // paragraph break
   if (_sentenceBoundary.hasMatch(buf)) return true;
-  final words = buf.trim().split(RegExp(r'\s+'));
-  if (_phraseBoundary.hasMatch(buf) && words.length >= 8) return true;
-  if (buf.length >= 350) return true;
-  if (words.length >= 25) return true;
+  if (buf.length >= 450) return true;              // safety: MAX_TOKENS guard
   return false;
 }
 
@@ -206,30 +222,43 @@ Future<void> run(Stream<String> tokens) async {
     final buf = wordBuf.toString();
     if (!_shouldFlush(buf)) return;
 
-    if (_sentenceBoundary.hasMatch(buf)) {
-      // Sentence end: flush everything.
+    // ── Paragraph break ───────────────────────────────────────────────────
+    final paraIdx = buf.indexOf('\n\n');
+    if (paraIdx >= 0) {
+      final para = buf.substring(0, paraIdx).trim();
+      if (para.isNotEmpty) chunkController.add(para);
       wordBuf.clear();
-      chunkController.add(buf);
-    } else if (_phraseBoundary.hasMatch(buf)) {
-      // Phrase boundary (,;:): flush up to and including the last boundary so
-      // espeak-ng receives the punctuation and generates a natural pause.
-      final match = _phraseBoundary.allMatches(buf).last;
-      final toFlush = buf.substring(0, match.start + 1); // include punctuation
-      final remaining = buf.substring(match.end);         // skip trailing space
-      chunkController.add(toFlush);
+      wordBuf.write(buf.substring(paraIdx + 2).trimLeft());
+      return;
+    }
+
+    // ── Sentence end ──────────────────────────────────────────────────────
+    // Flush up to and including the last sentence-end punctuation so Kokoro
+    // receives trailing punctuation (it influences prosody / trailing pitch).
+    if (_sentenceBoundary.hasMatch(buf)) {
+      final match = _sentenceBoundary.allMatches(buf).last;
+      final toFlush = buf.substring(0, match.end).trim();
+      final remaining = buf.substring(match.end).trimLeft();
+      if (toFlush.isNotEmpty) chunkController.add(toFlush);
       wordBuf.clear();
       wordBuf.write(remaining);
-    } else {
-      // Length / word-count limit: flush only up to the last space so we
-      // never cut a word in half (e.g. "t" | "wo" → espeak reads "T" then "wo").
-      final lastSpace = buf.lastIndexOf(' ');
-      if (lastSpace > 0) {
-        chunkController.add(buf.substring(0, lastSpace));
-        wordBuf.clear();
-        wordBuf.write(buf.substring(lastSpace + 1));
-      }
-      // No space found → keep buffering until a boundary appears.
+      return;
     }
+
+    // ── Safety split (MAX_TOKENS guard) ──────────────────────────────────
+    // Prefer splitting at a phrase boundary; fall back to last word boundary.
+    final splitAt = () {
+      final m = _phraseBoundary.allMatches(buf).lastOrNull;
+      if (m != null) return m.start + 1; // include the punctuation char
+      final sp = buf.lastIndexOf(' ');
+      return sp > 0 ? sp : -1;
+    }();
+    if (splitAt > 0) {
+      chunkController.add(buf.substring(0, splitAt).trim());
+      wordBuf.clear();
+      wordBuf.write(buf.substring(splitAt).trimLeft());
+    }
+    // No split point found → keep buffering (rare; very long single word).
   }
 
   await for (final token in tokens) {
