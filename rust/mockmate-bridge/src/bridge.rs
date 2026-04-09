@@ -203,6 +203,33 @@ pub async fn ollama_health_check() -> bool {
     OllamaLlm::new(None, None).health_check().await.unwrap_or(false)
 }
 
+/// Stream LLM tokens one-by-one to Flutter as they are generated.
+///
+/// Each emitted value is a raw token string.  The stream closes when generation
+/// finishes.  On error a single `"\nerror: <msg>"` token is emitted then the
+/// stream closes.
+pub async fn chat_stream(user_message: String, sink: StreamSink<String>) {
+    let s = state();
+    let kb = s.knowledge_base.lock().await.clone();
+    let mode = *s.mode.lock().await;
+    let system = build_system_prompt(mode, &kb);
+
+    match s.llm.read().await.chat(&system, &user_message).await {
+        Err(e) => { let _ = sink.add(format!("\nerror: {e}")); }
+        Ok(mut rx) => {
+            while let Some(result) = rx.recv().await {
+                match result {
+                    Ok(token) => { let _ = sink.add(token); }
+                    Err(e) => {
+                        let _ = sink.add(format!("\nerror: {e}"));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Send a user message and get the full LLM response using the current KB + mode.
 pub async fn chat(user_message: String) -> String {
     let s = state();
@@ -350,7 +377,13 @@ pub async fn transcribe_audio(pcm_bytes: Vec<u8>) -> String {
 
 /// Synthesise text to f32 LE PCM bytes using the current TTS provider.
 pub async fn synthesise_text(text: String) -> Vec<u8> {
-    state().tts.read().await.synthesise(&text).await.unwrap_or_default()
+    match state().tts.read().await.synthesise(&text).await {
+        Ok(pcm) => pcm,
+        Err(e) => {
+            eprintln!("[TTS-RUST] synthesise_text failed: {e:#}");
+            vec![]
+        }
+    }
 }
 
 /// Extract viseme frames from f32 LE PCM bytes.

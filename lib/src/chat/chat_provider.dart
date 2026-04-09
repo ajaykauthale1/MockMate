@@ -3,6 +3,18 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../audio/audio_provider.dart';
 import '../bridge/bridge.dart' as bridge;
+import '../tts/tts_pipeline.dart';
+
+// ---------------------------------------------------------------------------
+// Phonetic hint helpers
+// ---------------------------------------------------------------------------
+
+/// Replace [word](/phonetic/) with `word` for chat bubble display.
+String _stripPhoneticHintsForDisplay(String text) =>
+    text.replaceAllMapped(
+      RegExp(r'\[([^\]]+)\]\(/[^)]+/\)'),
+      (m) => m.group(1)!,
+    );
 
 // ---------------------------------------------------------------------------
 // Mode state
@@ -32,33 +44,45 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
   Future<void> send(String userText) async {
     final current = state.valueOrNull ?? [];
-    state = AsyncData(
-        [...current, ChatMessage(role: MessageRole.user, text: userText)]);
-    state = const AsyncLoading<List<ChatMessage>>().copyWithPrevious(state);
+
+    // Add user message + empty assistant placeholder for streaming.
+    state = AsyncData([
+      ...current,
+      ChatMessage(role: MessageRole.user, text: userText),
+      ChatMessage(role: MessageRole.assistant, text: ''),
+    ]);
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    final response = await bridge.chat(userMessage: userText);
-    final updated = state.valueOrNull ?? [];
-    state = AsyncData([
-      ...updated,
-      ChatMessage(role: MessageRole.assistant, text: response),
-    ]);
+    final fullBuffer = StringBuffer();
+    final synthQueue = StreamController<String>();
+    final synthDone = TtsPipeline.run(synthQueue.stream);
 
-    // Synthesise speech, play it, and extract visemes for avatar animation.
-    final pcm = await bridge.synthesiseText(text: response);
-    if (pcm.isNotEmpty) {
-      // Fire-and-forget — audio plays asynchronously while visemes are computed.
-      unawaited(bridge.playAudio(pcmBytes: pcm.toList()));
+    await for (final token in bridge.chatStream(userMessage: userText)) {
+      if (token.startsWith('\nerror:')) break;
+      fullBuffer.write(token);
+
+      // Display path: strip phonetic hints so the chat bubble shows only the
+      // visible word, not the [word](/phonetic/) markup.
+      final displayText = _stripPhoneticHintsForDisplay(fullBuffer.toString());
+
+      final msgs = state.valueOrNull ?? [];
+      state = AsyncData([
+        ...msgs.sublist(0, msgs.length - 1),
+        ChatMessage(role: MessageRole.assistant, text: displayText),
+      ]);
+
+      // TTS path: raw token — _cleanForTts in the pipeline extracts the
+      // phonetic form from [word](/phonetic/) before sending to espeak-ng.
+      synthQueue.add(token);
     }
-    final visemesJson =
-        await bridge.extractVisemes(pcmBytes: pcm.toList());
+
+    await synthQueue.close();
+    await synthDone;
+
+    final visemesJson = await bridge.extractVisemes(pcmBytes: []);
     ref.read(pendingVisemesProvider.notifier).state = visemesJson;
-
-    // If no visemes (no TTS), go idle immediately.
-    if (visemesJson == '[]') {
-      ref.read(audioStateProvider.notifier).state = AudioState.idle;
-    }
+    ref.read(audioStateProvider.notifier).state = AudioState.idle;
   }
 
   Future<void> switchMode(bool isTest) async {

@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use ort::{session::Session, value::Tensor};
+use ort::{execution_providers::CPU as CpuEp, session::Session, value::Tensor};
 use tokio::sync::Mutex;
 
 use mockmate_core::providers::{TtsPlaybackEvent, TtsProvider, Viseme};
@@ -119,48 +119,40 @@ pub fn ipa_char_to_viseme(c: char) -> u8 {
 ///
 /// Text → phonemes (espeak-ng subprocess) → token IDs → ONNX inference →
 /// f32 LE PCM at 24 kHz mono.
+/// Kokoro's phoneme token limit — sequences longer than this cause an ONNX
+/// buffer-overflow error.  We split inputs that would exceed it.
+const MAX_TOKENS: usize = 500;
+
 pub struct KokoroTts {
     session: Mutex<Session>,
-    /// Style / speaker embedding — 256 f32 values, shape [1, 1, 256].
+    /// Blended speaker embedding — 256 f32 values, shape [1, 256].
     style: Vec<f32>,
     espeak_bin: String,
     speed: f32,
 }
 
 impl KokoroTts {
-    /// Load from model + style files with default speed (1.0).
-    ///
-    /// * `model_path` — path to `kokoro-v0_19.onnx`
-    /// * `style_path` — raw binary file of **exactly 1 024 bytes** (256 × f32 LE),
-    ///                  one speaker/style embedding extracted from `voices.bin`
-    /// * `espeak_bin` — path to the `espeak-ng` executable
+    /// Load with default speed (1.0) and a single voice style.
     pub fn new(model_path: &str, style_path: &str, espeak_bin: &str) -> Result<Self> {
-        Self::with_speed(model_path, style_path, espeak_bin, 1.0)
+        Self::with_speed(model_path, style_path, espeak_bin, 0.9)
     }
 
-    /// Same as [`KokoroTts::new`] but with a custom playback speed multiplier.
+    /// Load with custom speed multiplier.
     pub fn with_speed(
         model_path: &str,
         style_path: &str,
         espeak_bin: &str,
         speed: f32,
     ) -> Result<Self> {
+        // Pin to CPU: Kokoro is lightweight (~82 M params) and runs fast on CPU.
+        // Keeping it off the GPU avoids VRAM contention with the Ollama LLM.
         let session = Session::builder()?
+            .with_execution_providers([CpuEp::default().build()])
+            .map_err(|e| anyhow::anyhow!("kokoro: CPU EP: {e}"))?
             .commit_from_file(model_path)
             .context("kokoro: failed to load ONNX model")?;
 
-        let raw = std::fs::read(style_path)
-            .context("kokoro: failed to read style file")?;
-        anyhow::ensure!(
-            raw.len() == 256 * 4,
-            "kokoro: style file must be exactly 1 024 bytes (256 × f32 LE), got {} bytes",
-            raw.len()
-        );
-
-        let style: Vec<f32> = raw
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-            .collect();
+        let style = Self::load_style(style_path)?;
 
         Ok(Self {
             session: Mutex::new(session),
@@ -169,9 +161,122 @@ impl KokoroTts {
             speed,
         })
     }
+
+    /// Load with two voice styles blended by `weight_a` (0.0–1.0).
+    ///
+    /// The blended embedding = `style_a * weight_a + style_b * (1 - weight_a)`.
+    /// For example `weight_a = 0.7` gives 70 % voice A, 30 % voice B.
+    pub fn with_blend(
+        model_path: &str,
+        style_path_a: &str,
+        style_path_b: &str,
+        weight_a: f32,
+        espeak_bin: &str,
+        speed: f32,
+    ) -> Result<Self> {
+        // Pin to CPU: Kokoro is lightweight (~82 M params) and runs fast on CPU.
+        // Keeping it off the GPU avoids VRAM contention with the Ollama LLM.
+        let session = Session::builder()?
+            .with_execution_providers([CpuEp::default().build()])
+            .map_err(|e| anyhow::anyhow!("kokoro: CPU EP: {e}"))?
+            .commit_from_file(model_path)
+            .context("kokoro: failed to load ONNX model")?;
+
+        let a = Self::load_style(style_path_a)?;
+        let b = Self::load_style(style_path_b)?;
+        let wb = 1.0 - weight_a;
+        let style: Vec<f32> = a.iter().zip(b.iter()).map(|(x, y)| x * weight_a + y * wb).collect();
+
+        Ok(Self {
+            session: Mutex::new(session),
+            style,
+            espeak_bin: espeak_bin.to_string(),
+            speed,
+        })
+    }
+
+    fn load_style(path: &str) -> Result<Vec<f32>> {
+        let raw = std::fs::read(path)
+            .with_context(|| format!("kokoro: failed to read style file {path}"))?;
+        anyhow::ensure!(
+            raw.len() == 256 * 4,
+            "kokoro: style file must be exactly 1 024 bytes (256 × f32 LE), got {} bytes",
+            raw.len()
+        );
+        Ok(raw.chunks_exact(4)
+            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .collect())
+    }
 }
 
 impl KokoroTts {
+    /// Public synthesis entry-point with automatic overflow retry.
+    ///
+    /// If the phoneme sequence exceeds [`MAX_TOKENS`], the text is split at its
+    /// midpoint (on a word boundary) and the two halves are synthesised
+    /// separately then concatenated — matching the approach used by kokoro-tts.
+    ///
+    /// Returns a `Pin<Box<dyn Future>>` to allow the recursive async call.
+    pub(crate) fn synthesise_safe<'a>(
+        &'a self,
+        text: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TtsPlaybackEvent>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            match self.synthesise_inner(text).await {
+                Ok(r) => Ok(r),
+                Err(e)
+                    if e.to_string().contains("out of bounds")
+                        || e.to_string().contains("index 5") =>
+                {
+                    eprintln!("[TTS-RUST] token overflow, splitting: {e}");
+                    // Split on a word boundary near the midpoint.
+                    let mid = text.len() / 2;
+                    let split = text[..mid].rfind(' ').map(|i| i + 1).unwrap_or(mid);
+                    let (a, b) = text.split_at(split);
+                    let ra = self.synthesise_safe(a.trim()).await?;
+                    let rb = self.synthesise_safe(b.trim()).await?;
+                    // Concatenate audio; compute offset before extending.
+                    let mut audio = ra.audio;
+                    let offset_ms = audio.len() as u32 / (4 * 24); // bytes → ms at 24 kHz f32
+                    audio.extend_from_slice(&rb.audio);
+                    let mut visemes = ra.visemes;
+                    visemes.extend(rb.visemes.into_iter().map(|v| Viseme {
+                        id: v.id,
+                        timestamp_ms: v.timestamp_ms + offset_ms,
+                    }));
+                    Ok(TtsPlaybackEvent { audio, visemes })
+                }
+                Err(e) => Err(e),
+            }
+        })
+    }
+
+    /// Apply Misaki's IPA normalisation so phoneme tokens match Kokoro training.
+    ///
+    /// Misaki post-processes espeak-ng `en-us` IPA output with these mappings:
+    /// diphthongs collapse to their single Kokoro uppercase tokens, and
+    /// affricates are consolidated to precomposed IPA chars.
+    fn misaki_normalize(ipa: &str) -> String {
+        // Multi-char replacements MUST precede single-char ones to avoid
+        // consuming part of a pair before the pair match runs.
+        //
+        // American English diphthongs (espeak -v en-us output):
+        //   eɪ → A   oʊ → O   aɪ → I   aʊ → W   ɔɪ → Y
+        // British English fallback (espeak -v en / en-gb output — used when
+        //   en_US voice file is absent from the espeak data directory):
+        //   əʊ → O  (British "goat" vowel; American uses oʊ, British uses əʊ)
+        // Affricates: single precomposed char, consistent across dialects.
+        ipa.replace("eɪ", "A")   // day, say, make, face
+           .replace("oʊ", "O")   // go, know, code, both (American)
+           .replace("əʊ", "O")   // go, know, code, both (British fallback)
+           .replace("aɪ", "I")   // I, my, time, write
+           .replace("aʊ", "W")   // now, how, out, cloud
+           .replace("ɔɪ", "Y")   // boy, choice, oil
+           .replace("dʒ", "ʤ")  // job, just → single precomposed char
+           .replace("tʃ", "ʧ")  // check, change → single precomposed char
+    }
+
     /// Core synthesis: phonemise → tokenise → ONNX → pack bytes + build visemes.
     async fn synthesise_inner(&self, text: &str) -> Result<TtsPlaybackEvent> {
         // ── 1. Phonemise via espeak-ng ────────────────────────────────────────
@@ -179,11 +284,27 @@ impl KokoroTts {
         let text_owned = text.to_string();
 
         let ipa = tokio::task::spawn_blocking(move || -> Result<String> {
-            let mut child = Command::new(&espeak)
-                .args(["--ipa", "-q", "--stdin"])
+            // Derive the data directory from the binary path so espeak-ng can
+            // find its phoneme tables regardless of the working directory.
+            let data_dir = std::path::Path::new(&espeak)
+                .parent()
+                .map(|p| p.join("espeak-ng-data"))
+                .filter(|p| p.exists());
+
+            eprintln!("[TTS-RUST] espeak bin={espeak:?} data={data_dir:?}");
+            let mut cmd = Command::new(&espeak);
+            // -v en-us: American English voice — clearer consonants, correct
+            // stress patterns, and diphthong sequences that match Kokoro training.
+            cmd.args(["--ipa", "-q", "--stdin", "-v", "en-us"]);
+            if let Some(ref data) = data_dir {
+                let path_arg = format!("--path={}", data.display());
+                eprintln!("[TTS-RUST] passing {path_arg:?}");
+                cmd.arg(path_arg);
+            }
+            let mut child = cmd
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()
                 .with_context(|| format!("kokoro: failed to spawn espeak-ng ({espeak})"))?;
 
@@ -194,6 +315,16 @@ impl KokoroTts {
                 .write_all(text_owned.as_bytes())?;
 
             let out = child.wait_with_output()?;
+            let stderr_str = String::from_utf8_lossy(&out.stderr);
+            if !stderr_str.trim().is_empty() {
+                tracing::warn!("espeak-ng stderr: {}", stderr_str.trim());
+            }
+            tracing::debug!(
+                "espeak-ng exit={} stdout_bytes={} ipa_preview={:?}",
+                out.status,
+                out.stdout.len(),
+                String::from_utf8_lossy(&out.stdout).chars().take(80).collect::<String>()
+            );
             anyhow::ensure!(
                 out.status.success(),
                 "kokoro: espeak-ng exited with status {}",
@@ -202,6 +333,11 @@ impl KokoroTts {
             Ok(String::from_utf8_lossy(&out.stdout).into_owned())
         })
         .await??;
+
+        // Apply Misaki diphthong + affricate normalization before tokenising.
+        let ipa = Self::misaki_normalize(&ipa);
+
+        tracing::debug!("kokoro: phoneme count={}", ipa.chars().filter(|c| *c != '\n' && *c != ' ').count());
 
         // ── 2. Build phoneme-viseme list from IPA ─────────────────────────────
         // Collect (char, viseme_id) pairs, skipping chars not in the token vocab.
@@ -229,7 +365,7 @@ impl KokoroTts {
         let tokens_t =
             Tensor::<i64>::from_array((vec![1i64, seq_len], tokens))?;
         let style_t =
-            Tensor::<f32>::from_array((vec![1i64, 1i64, 256i64], self.style.clone()))?;
+            Tensor::<f32>::from_array((vec![1i64, 256i64], self.style.clone()))?;
         let speed_t =
             Tensor::<f32>::from_array((vec![1i64], vec![self.speed]))?;
 
@@ -245,7 +381,12 @@ impl KokoroTts {
             .context("kokoro: model produced no outputs")?
             .to_string();
         let (_, audio_view) = outputs[output_name].try_extract_tensor::<f32>()?;
-        let audio_samples: Vec<f32> = audio_view.iter().copied().collect();
+        // Normalise to 0.75 peak so volume is consistent regardless of content.
+        // Peak-based gain avoids the hard clipping that a fixed multiplier causes.
+        let raw: Vec<f32> = audio_view.iter().copied().collect();
+        let peak = raw.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        let gain = if peak > 1e-6 { 0.45 / peak } else { 1.0 };
+        let audio_samples: Vec<f32> = raw.iter().map(|s| s * gain).collect();
         drop(outputs);
         drop(guard);
 
@@ -281,11 +422,11 @@ impl KokoroTts {
 #[async_trait]
 impl TtsProvider for KokoroTts {
     async fn synthesise(&self, text: &str) -> Result<Vec<u8>> {
-        Ok(self.synthesise_inner(text).await?.audio)
+        Ok(self.synthesise_safe(text).await?.audio)
     }
 
     async fn synthesise_with_visemes(&self, text: &str) -> Result<TtsPlaybackEvent> {
-        self.synthesise_inner(text).await
+        self.synthesise_safe(text).await
     }
 }
 

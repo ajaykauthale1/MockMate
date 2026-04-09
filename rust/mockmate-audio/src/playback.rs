@@ -131,25 +131,45 @@ impl AudioPlayer {
     // Private helpers
     // -----------------------------------------------------------------------
 
-    /// Linear interpolation resample from `from_rate` to `to_rate`.
+    /// Windowed-sinc resample (Hann window, ±16 tap radius).
     ///
-    /// Good enough quality for TTS output where the content is voice rather
-    /// than music.  No quality loss at matching rates (guarded by the caller).
+    /// Much higher quality than linear interpolation: avoids the aliasing on
+    /// fricatives / sibilants that linear causes when going 24 kHz → 48 kHz.
+    /// No quality loss at matching rates (guarded by the caller).
     fn resample_linear(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
         if samples.is_empty() {
             return vec![];
         }
+        const RADIUS: i64 = 16;
         let ratio = from_rate as f64 / to_rate as f64;
         let out_len = (samples.len() as f64 / ratio).ceil() as usize;
-        let last = samples.len() - 1;
+        let len = samples.len() as i64;
+        use std::f64::consts::PI;
         (0..out_len)
             .map(|i| {
-                let src = i as f64 * ratio;
-                let idx = src as usize;
-                let frac = (src - idx as f64) as f32;
-                let a = samples[idx.min(last)];
-                let b = samples[(idx + 1).min(last)];
-                a + (b - a) * frac
+                let center = i as f64 * ratio;
+                let center_i = center.floor() as i64;
+                let mut sum = 0.0f64;
+                for k in (center_i - RADIUS)..=(center_i + RADIUS) {
+                    if k < 0 || k >= len {
+                        continue;
+                    }
+                    let t = center - k as f64;
+                    let sinc = if t.abs() < 1e-10 {
+                        1.0
+                    } else {
+                        let pt = PI * t;
+                        pt.sin() / pt
+                    };
+                    let norm = t / (RADIUS as f64 + 1.0);
+                    let window = if norm.abs() <= 1.0 {
+                        0.5 * (1.0 + (PI * norm).cos())
+                    } else {
+                        0.0
+                    };
+                    sum += samples[k as usize] as f64 * sinc * window;
+                }
+                sum.clamp(-1.0, 1.0) as f32
             })
             .collect()
     }
