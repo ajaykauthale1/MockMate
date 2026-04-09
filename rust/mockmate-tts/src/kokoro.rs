@@ -260,8 +260,16 @@ impl KokoroTts {
     fn misaki_normalize(ipa: &str) -> String {
         // Multi-char replacements MUST precede single-char ones to avoid
         // consuming part of a pair before the pair match runs.
+        //
+        // American English diphthongs (espeak -v en-us output):
+        //   eɪ → A   oʊ → O   aɪ → I   aʊ → W   ɔɪ → Y
+        // British English fallback (espeak -v en / en-gb output — used when
+        //   en_US voice file is absent from the espeak data directory):
+        //   əʊ → O  (British "goat" vowel; American uses oʊ, British uses əʊ)
+        // Affricates: single precomposed char, consistent across dialects.
         ipa.replace("eɪ", "A")   // day, say, make, face
-           .replace("oʊ", "O")   // go, know, code, both
+           .replace("oʊ", "O")   // go, know, code, both (American)
+           .replace("əʊ", "O")   // go, know, code, both (British fallback)
            .replace("aɪ", "I")   // I, my, time, write
            .replace("aʊ", "W")   // now, how, out, cloud
            .replace("ɔɪ", "Y")   // boy, choice, oil
