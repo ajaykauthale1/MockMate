@@ -155,7 +155,11 @@ String _stripMarkdown(String t) {
   t = t.replaceAll(RegExp(r'<[^>]{1,40}>'),                                   '');
   t = t.replaceAllMapped(
     RegExp(r'`([^`\n]+)`'),
-    (m) => m.group(1)!.replaceAll('_', ' ').replaceAll('-', ' '),
+    // Replace `_` and hyphenated-word separators (my-var → my var) but leave
+    // spaced arithmetic minus (target - num) intact for the code-syntax phase.
+    (m) => m.group(1)!
+        .replaceAll('_', ' ')
+        .replaceAllMapped(RegExp(r'(\w)-(\w)'), (h) => '${h.group(1)} ${h.group(2)}'),
   );
   t = t.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m.group(1)!);
   t = t.replaceAllMapped(RegExp(r'\*{1,3}([^*\n]+)\*{1,3}'), (m) => m.group(1)!);
