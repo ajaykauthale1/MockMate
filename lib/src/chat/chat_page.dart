@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../audio/audio_provider.dart';
 import '../avatar/avatar_widget.dart';
+import '../bridge/bridge.dart' as bridge;
 import '../settings/settings_screen.dart';
 import '../theme/ske_theme.dart';
 import 'chat_provider.dart';
@@ -22,6 +23,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    bridge.stopAudio();
     super.dispose();
   }
 
