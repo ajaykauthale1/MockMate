@@ -120,6 +120,8 @@ class InterviewNotifier extends Notifier<InterviewState> {
   final _executor = CodeExecutor();
   final _detector = RuntimeDetector();
   Timer? _ticker;
+  bool _cancelled = false;
+  StreamController<String>? _synthQueue;
 
   @override
   InterviewState build() {
@@ -211,12 +213,20 @@ class InterviewNotifier extends Notifier<InterviewState> {
   /// Stream LLM tokens, update the last assistant message in real-time,
   /// and pipe tokens through [TtsPipeline] for sentence-level audio synthesis.
   Future<void> _streamAndSpeak(String userMessage) async {
+    // Cancel any in-flight TTS/LLM.
+    _cancelled = true;
+    await _synthQueue?.close();
+    await bridge.stopAudio();
+    _cancelled = false;
+
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
     final synthQueue = StreamController<String>();
+    _synthQueue = synthQueue;
     final synthDone = TtsPipeline.run(synthQueue.stream);
 
     await for (final token in bridge.chatStream(userMessage: userMessage)) {
+      if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
 
       // Append token to last assistant message.
@@ -229,13 +239,15 @@ class InterviewNotifier extends Notifier<InterviewState> {
       );
       state = state.copyWith(messages: msgs, aiThinking: false);
 
-      synthQueue.add(token);
+      if (!synthQueue.isClosed) synthQueue.add(token);
     }
 
-    await synthQueue.close();
+    if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
 
-    ref.read(audioStateProvider.notifier).state = AudioState.idle;
+    if (!_cancelled) {
+      ref.read(audioStateProvider.notifier).state = AudioState.idle;
+    }
   }
 
   Future<void> submitCode() async {
@@ -313,9 +325,16 @@ class InterviewNotifier extends Notifier<InterviewState> {
     _ticker = null;
   }
 
+  void stopTts() {
+    _cancelled = true;
+    _synthQueue?.close();
+    bridge.stopAudio();
+  }
+
   void _cleanup() {
     _ticker?.cancel();
     _ticker = null;
+    stopTts();
   }
 
   String _buildQuestionKb(InterviewQuestion q) {

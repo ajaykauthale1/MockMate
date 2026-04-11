@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -86,6 +87,40 @@ class OllamaInstaller {
       }
     }
     await sink.close();
+  }
+
+  /// Ensure Ollama is running. If not reachable, spawn `ollama serve` detached.
+  ///
+  /// [binPath] is optional — falls back to [detectBinPath] then plain `ollama`.
+  static Future<void> ensureRunning({String? binPath}) async {
+    const url = 'http://127.0.0.1:11434/api/tags';
+    try {
+      final resp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+      if (resp.statusCode == 200) {
+        debugPrint('[Ollama] already running');
+        return;
+      }
+    } catch (_) {
+      // Not reachable — fall through to start it.
+    }
+
+    final exe = binPath?.isNotEmpty == true
+        ? binPath!
+        : (await detectBinPath() ?? 'ollama');
+
+    debugPrint('[Ollama] starting: $exe serve');
+    try {
+      await Process.start(
+        exe,
+        ['serve'],
+        mode: ProcessStartMode.detached,
+        runInShell: false,
+      );
+      // Give it a moment to bind the port.
+      await Future<void>.delayed(const Duration(seconds: 2));
+    } catch (e) {
+      debugPrint('[Ollama] failed to start: $e');
+    }
   }
 
   /// Try to locate the Ollama binary on PATH or known install locations.

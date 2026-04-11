@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/bridge/bridge.dart' as bridge;
 import 'src/bridge/frb_generated.dart';
 import 'src/home_screen.dart';
+import 'src/onboarding/ollama_installer.dart';
 import 'src/onboarding/onboarding_page.dart';
 import 'src/services/config_service.dart';
 import 'src/services/kb_service.dart';
@@ -19,6 +20,12 @@ Future<void> main() async {
   await loadKnowledgeBaseAssets();
   await _initTts();
   _onboardingDone = await ConfigService.hasConfig();
+  if (_onboardingDone) {
+    final cfg = await ConfigService.load();
+    if (cfg.llmMode == 'local') {
+      await OllamaInstaller.ensureRunning(binPath: cfg.ollamaBinPath);
+    }
+  }
   runApp(ProviderScope(child: MockMateApp(onboardingDone: _onboardingDone)));
 }
 
