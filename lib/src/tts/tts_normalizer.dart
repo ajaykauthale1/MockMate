@@ -188,6 +188,13 @@ String _normalizeCodeSyntax(String t) {
 
   t = t.replaceAllMapped(RegExp(r'(\w+)\+\+'), (m) => '${m.group(1)} plus plus');
   t = t.replaceAllMapped(RegExp(r'(\w+)--'),   (m) => '${m.group(1)} minus minus');
+  // Arithmetic minus: `word - word` → `word minus word`.
+  // Must run before _normalizePunctuation which converts spaced dashes to pauses,
+  // silently dropping the operator (e.g. "target - num" was read as "target num").
+  t = t.replaceAllMapped(
+    RegExp(r'(\w)\s+-\s+(\w)'),
+    (m) => '${m.group(1)} minus ${m.group(2)}',
+  );
   t = t.replaceAll('_', ' ');
   t = t.replaceAllMapped(
     RegExp(r'\b(\w+)\.(\w+)\b'),
