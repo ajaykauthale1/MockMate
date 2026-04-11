@@ -27,6 +27,12 @@ class _InterviewPageState extends ConsumerState<InterviewPage> {
   }
 
   @override
+  void dispose() {
+    ref.read(interviewProvider.notifier).stopTts();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = ref.watch(interviewProvider);
     final notifier = ref.read(interviewProvider.notifier);

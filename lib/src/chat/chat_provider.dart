@@ -39,10 +39,26 @@ class ChatMessage {
 // ---------------------------------------------------------------------------
 
 class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
+  bool _cancelled = false;
+  StreamController<String>? _synthQueue;
+
   @override
-  Future<List<ChatMessage>> build() async => [];
+  Future<List<ChatMessage>> build() async {
+    ref.onDispose(() {
+      _cancelled = true;
+      _synthQueue?.close();
+      bridge.stopAudio();
+    });
+    return [];
+  }
 
   Future<void> send(String userText) async {
+    // Cancel any in-flight TTS/LLM.
+    _cancelled = true;
+    await _synthQueue?.close();
+    await bridge.stopAudio();
+    _cancelled = false;
+
     final current = state.valueOrNull ?? [];
 
     // Add user message + empty assistant placeholder for streaming.
@@ -56,9 +72,11 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
     final fullBuffer = StringBuffer();
     final synthQueue = StreamController<String>();
+    _synthQueue = synthQueue;
     final synthDone = TtsPipeline.run(synthQueue.stream);
 
     await for (final token in bridge.chatStream(userMessage: userText)) {
+      if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
       fullBuffer.write(token);
 
@@ -74,15 +92,17 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
       // TTS path: raw token — _cleanForTts in the pipeline extracts the
       // phonetic form from [word](/phonetic/) before sending to espeak-ng.
-      synthQueue.add(token);
+      if (!synthQueue.isClosed) synthQueue.add(token);
     }
 
-    await synthQueue.close();
+    if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
 
-    final visemesJson = await bridge.extractVisemes(pcmBytes: []);
-    ref.read(pendingVisemesProvider.notifier).state = visemesJson;
-    ref.read(audioStateProvider.notifier).state = AudioState.idle;
+    if (!_cancelled) {
+      final visemesJson = await bridge.extractVisemes(pcmBytes: []);
+      ref.read(pendingVisemesProvider.notifier).state = visemesJson;
+      ref.read(audioStateProvider.notifier).state = AudioState.idle;
+    }
   }
 
   Future<void> switchMode(bool isTest) async {
