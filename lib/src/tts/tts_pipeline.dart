@@ -69,7 +69,11 @@ final _silencePadding = List<int>.filled(1920 * 4, 0);
 /// 500 ms pause used after code-snippet announcements to signal a context switch.
 final _codeSnippetPadding = List<int>.filled(24000 ~/ 2 * 4, 0);
 
-Future<void> run(Stream<String> tokens) async {
+/// Called with the display text of each chunk the moment its audio starts playing.
+/// Receives the *raw* (pre-clean) chunk so callers can strip phonetic hints themselves.
+typedef OnChunkReady = void Function(String rawChunk);
+
+Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
   final chunkController = StreamController<String>();
 
   // Synthesis consumer — runs concurrently with token reading.
@@ -80,16 +84,24 @@ Future<void> run(Stream<String> tokens) async {
       final hasTrailingColon = chunk.trimRight().endsWith(':');
       final clean = cleanForTts(chunk);
       debugPrint('[TTS ${_ts()}] chunk_clean : $clean');
-      if (clean.isEmpty) continue;
+      if (clean.isEmpty) {
+        // Still notify so display text isn't silently dropped.
+        onChunkReady?.call(chunk);
+        continue;
+      }
       debugPrint('[TTS ${_ts()}] synth_start');
       final pcm = await bridge.synthesiseText(text: clean);
       debugPrint('[TTS ${_ts()}] synth_done  : ${pcm.length} bytes');
       if (pcm.isNotEmpty) {
         debugPrint('[TTS ${_ts()}] enqueue_audio');
         unawaited(bridge.playAudio(pcmBytes: pcm.toList()));
+        // Notify caller — audio is now enqueued, reveal this chunk's text.
+        onChunkReady?.call(chunk);
         // Longer pause after code blocks or colon introductions; normal gap otherwise.
         final padding = (hasCodeBlock || hasTrailingColon) ? _codeSnippetPadding : _silencePadding;
         unawaited(bridge.playAudio(pcmBytes: padding));
+      } else {
+        onChunkReady?.call(chunk);
       }
     }
   }();
@@ -173,7 +185,9 @@ Future<void> run(Stream<String> tokens) async {
 
 /// Convenience wrapper — identical signature used by both providers.
 abstract class TtsPipeline {
-  static Future<void> run(Stream<String> tokens) => _run(tokens);
+  static Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) =>
+      _runPipeline(tokens, onChunkReady: onChunkReady);
 }
 
-Future<void> _run(Stream<String> tokens) => run(tokens);
+Future<void> _runPipeline(Stream<String> tokens, {OnChunkReady? onChunkReady}) =>
+    run(tokens, onChunkReady: onChunkReady);

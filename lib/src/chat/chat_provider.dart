@@ -31,7 +31,8 @@ enum MessageRole { user, assistant }
 class ChatMessage {
   final MessageRole role;
   final String text;
-  const ChatMessage({required this.role, required this.text});
+  final bool thinking;
+  const ChatMessage({required this.role, required this.text, this.thinking = false});
 }
 
 // ---------------------------------------------------------------------------
@@ -61,42 +62,61 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
     final current = state.valueOrNull ?? [];
 
-    // Add user message + empty assistant placeholder for streaming.
+    // Add user message + empty assistant placeholder; keep thinking=true until
+    // first audio chunk is ready so text and audio start simultaneously.
     state = AsyncData([
       ...current,
       ChatMessage(role: MessageRole.user, text: userText),
-      ChatMessage(role: MessageRole.assistant, text: ''),
+      ChatMessage(role: MessageRole.assistant, text: '', thinking: true),
     ]);
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    final fullBuffer = StringBuffer();
+    // All raw tokens accumulated — used as fallback if TTS never fires.
+    final tokenBuffer = StringBuffer();
+    // Display buffer revealed chunk-by-chunk via onChunkReady.
+    final displayBuffer = StringBuffer();
+
+    void revealChunk(String rawChunk) {
+      if (_cancelled) return;
+      displayBuffer.write(_stripPhoneticHintsForDisplay(rawChunk));
+      final msgs = state.valueOrNull ?? [];
+      if (msgs.isEmpty) return;
+      state = AsyncData([
+        ...msgs.sublist(0, msgs.length - 1),
+        ChatMessage(role: MessageRole.assistant, text: displayBuffer.toString(), thinking: false),
+      ]);
+    }
+
     final synthQueue = StreamController<String>();
     _synthQueue = synthQueue;
-    final synthDone = TtsPipeline.run(synthQueue.stream);
+    final synthDone = TtsPipeline.run(synthQueue.stream, onChunkReady: revealChunk);
 
     await for (final token in bridge.chatStream(userMessage: userText)) {
       if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
-      fullBuffer.write(token);
-
-      // Display path: strip phonetic hints so the chat bubble shows only the
-      // visible word, not the [word](/phonetic/) markup.
-      final displayText = _stripPhoneticHintsForDisplay(fullBuffer.toString());
-
-      final msgs = state.valueOrNull ?? [];
-      state = AsyncData([
-        ...msgs.sublist(0, msgs.length - 1),
-        ChatMessage(role: MessageRole.assistant, text: displayText),
-      ]);
-
-      // TTS path: raw token — _cleanForTts in the pipeline extracts the
-      // phonetic form from [word](/phonetic/) before sending to espeak-ng.
+      tokenBuffer.write(token);
+      // Feed raw token to TTS pipeline only — display is gated on onChunkReady.
       if (!synthQueue.isClosed) synthQueue.add(token);
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
+
+    // Flush if TTS never fired (very short response / TTS disabled).
+    if (!_cancelled) {
+      final msgs = state.valueOrNull ?? [];
+      if (msgs.isNotEmpty && msgs.last.thinking) {
+        state = AsyncData([
+          ...msgs.sublist(0, msgs.length - 1),
+          ChatMessage(
+            role: MessageRole.assistant,
+            text: _stripPhoneticHintsForDisplay(tokenBuffer.toString()),
+            thinking: false,
+          ),
+        ]);
+      }
+    }
 
     if (!_cancelled) {
       final visemesJson = await bridge.extractVisemes(pcmBytes: []);

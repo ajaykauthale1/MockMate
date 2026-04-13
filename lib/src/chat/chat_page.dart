@@ -179,28 +179,28 @@ class _MessageBubble extends StatelessWidget {
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 5),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: isUser
-            ? skeRaised(
-                radius: 16,
-                color: SkeColors.userBubble,
+            ? skeRaised(radius: 16, color: SkeColors.userBubble)
+            : skeSunken(radius: 16, color: SkeColors.aiBubble),
+        child: message.thinking
+            ? const SizedBox(
+                width: 20,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 1.5, color: SkeColors.accent),
               )
-            : skeSunken(
-                radius: 16,
-                color: SkeColors.aiBubble,
+            : SelectableText(
+                message.text,
+                style: TextStyle(
+                  color: isUser
+                      ? SkeColors.textPrimary
+                      : SkeColors.textPrimary.withValues(alpha: 0.90),
+                  fontSize: 14,
+                ),
               ),
-        child: SelectableText(
-          message.text,
-          style: TextStyle(
-            color: isUser
-                ? SkeColors.textPrimary
-                : SkeColors.textPrimary.withValues(alpha: 0.90),
-            fontSize: 14,
-          ),
-        ),
       ),
     );
   }

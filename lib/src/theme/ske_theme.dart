@@ -1,53 +1,69 @@
 import 'package:flutter/material.dart';
 
 abstract final class SkeColors {
-  static const background = Color(0xFF1C1B2E);
-  static const panel = Color(0xFF252440);
-  static const panelDark = Color(0xFF18172A);
-  static const shadowLight = Color(0xFF3A3860);
-  static const shadowDark = Color(0xFF08071A);
-  static const accent = Color(0xFFD4A017);
-  static const accentDim = Color(0xFF8A6A10);
-  static const textPrimary = Color(0xFFEDE8D8);
-  static const textSecondary = Color(0xFF9A96A8);
-  static const userBubble = Color(0xFF2B3A60);
-  static const aiBubble = Color(0xFF1E2840);
-  static const mic = Color(0xFFBE3A3A);
+  // Surfaces — warm cream scale
+  static const background  = Color(0xFFF2F1ED); // page bg
+  static const panel       = Color(0xFFE6E5E0); // card / container
+  static const panelDark   = Color(0xFFEBEAE5); // button / input bg
+
+  // Text
+  static const textPrimary   = Color(0xFF26251E); // warm near-black
+  static const textSecondary = Color(0x8C26251E); // 55% warm brown
+
+  // Accent
+  static const accent    = Color(0xFFF54E00); // cursor orange
+  static const accentDim = Color(0xFFC08532); // gold secondary
+
+  // Bubbles
+  static const userBubble = Color(0xFFEBEAE5); // surface 300
+  static const aiBubble   = Color(0xFFF7F7F4); // surface 100
+
+  // Semantic
+  static const mic   = Color(0xFFCF2D56); // warm crimson (active / error)
+  static const error = Color(0xFFCF2D56);
+
+  // Border helpers (rgba(38,37,30,alpha) as const Color)
+  static const borderLight  = Color(0x1A26251E); // 10% warm brown
+  static const borderMedium = Color(0x3326251E); // 20% warm brown
+
+  // Legacy aliases — used in widget files for borders/dividers/hints.
+  static const shadowDark  = borderLight;   // thin dividers & borders
+  static const shadowLight = borderMedium;  // slightly visible borders & hints
 }
 
-BoxDecoration skeRaised({double radius = 12, Color? color}) => BoxDecoration(
+/// Elevated card / raised surface — flat with border + soft shadow.
+BoxDecoration skeRaised({double radius = 8, Color? color}) => BoxDecoration(
       color: color ?? SkeColors.panel,
       borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: SkeColors.borderLight, width: 1),
       boxShadow: const [
         BoxShadow(
-            color: SkeColors.shadowDark, offset: Offset(3, 3), blurRadius: 8),
-        BoxShadow(
-            color: SkeColors.shadowLight, offset: Offset(-2, -2), blurRadius: 5),
+          color: Color(0x0F000000), // 6% black
+          offset: Offset(0, 2),
+          blurRadius: 8,
+        ),
       ],
     );
 
-BoxDecoration skeSunken({double radius = 12, Color? color}) => BoxDecoration(
+/// Sunken / input surface — slightly lighter, border, no shadow.
+BoxDecoration skeSunken({double radius = 8, Color? color}) => BoxDecoration(
       color: color ?? SkeColors.panelDark,
       borderRadius: BorderRadius.circular(radius),
-      boxShadow: const [
-        BoxShadow(
-            color: SkeColors.shadowLight, offset: Offset(2, 2), blurRadius: 5),
-        BoxShadow(
-            color: SkeColors.shadowDark, offset: Offset(-2, -2), blurRadius: 5),
-      ],
+      border: Border.all(color: SkeColors.borderLight, width: 1),
     );
 
 ThemeData skeuomorphicTheme() => ThemeData(
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: SkeColors.background,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         surface: SkeColors.panel,
         primary: SkeColors.accent,
-        onPrimary: SkeColors.panelDark,
+        onPrimary: Colors.white,
         primaryContainer: SkeColors.userBubble,
         onPrimaryContainer: SkeColors.textPrimary,
         surfaceContainerHigh: SkeColors.aiBubble,
         onSurface: SkeColors.textPrimary,
+        error: SkeColors.error,
       ),
       textTheme: const TextTheme(
         bodyMedium: TextStyle(color: SkeColors.textPrimary, fontSize: 14),
@@ -61,8 +77,18 @@ ThemeData skeuomorphicTheme() => ThemeData(
       appBarTheme: const AppBarTheme(
         backgroundColor: SkeColors.panelDark,
         foregroundColor: SkeColors.textPrimary,
-        elevation: 4,
-        shadowColor: SkeColors.shadowDark,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: TextStyle(
+          color: SkeColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        shape: Border(
+          bottom: BorderSide(color: SkeColors.borderLight, width: 1),
+        ),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
@@ -72,9 +98,14 @@ ThemeData skeuomorphicTheme() => ThemeData(
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (s) => s.contains(WidgetState.selected)
-              ? SkeColors.accentDim
-              : SkeColors.shadowDark,
+              ? const Color(0x33F54E00) // accent 20%
+              : SkeColors.borderMedium,
         ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: SkeColors.borderLight,
+        thickness: 1,
+        space: 1,
       ),
       useMaterial3: true,
     );
