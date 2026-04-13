@@ -183,13 +183,13 @@ class InterviewNotifier extends Notifier<InterviewState> {
     final setupMsg =
         '${_conductor.buildInterviewerPrompt(q)}\n\nNow greet the candidate and present the question. Be concise.';
 
-    // Hidden user prompt + empty assistant placeholder for streaming.
+    // Hidden user prompt + empty assistant placeholder; aiThinking stays true
+    // until first audio chunk fires via onChunkReady in _streamAndSpeak.
     state = state.copyWith(
       messages: [
         InterviewMessage(role: MessageRole.user, text: setupMsg, hidden: true),
         InterviewMessage(role: MessageRole.assistant, text: ''),
       ],
-      aiThinking: false,
     );
 
     await _streamAndSpeak(setupMsg);
@@ -210,8 +210,8 @@ class InterviewNotifier extends Notifier<InterviewState> {
     await _streamAndSpeak(text);
   }
 
-  /// Stream LLM tokens, update the last assistant message in real-time,
-  /// and pipe tokens through [TtsPipeline] for sentence-level audio synthesis.
+  /// Stream LLM tokens, pipe through TtsPipeline, and reveal text in sync
+  /// with audio — text becomes visible only when the first audio chunk plays.
   Future<void> _streamAndSpeak(String userMessage) async {
     // Cancel any in-flight TTS/LLM.
     _cancelled = true;
@@ -221,29 +221,51 @@ class InterviewNotifier extends Notifier<InterviewState> {
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    final synthQueue = StreamController<String>();
-    _synthQueue = synthQueue;
-    final synthDone = TtsPipeline.run(synthQueue.stream);
+    // Accumulate raw tokens; reveal chunk-by-chunk via onChunkReady.
+    final displayBuffer = StringBuffer();
 
-    await for (final token in bridge.chatStream(userMessage: userMessage)) {
-      if (_cancelled) break;
-      if (token.startsWith('\nerror:')) break;
-
-      // Append token to last assistant message.
+    void revealChunk(String rawChunk) {
+      if (_cancelled) return;
+      displayBuffer.write(rawChunk);
       final msgs = state.messages.toList();
+      if (msgs.isEmpty) return;
       final last = msgs.last;
       msgs[msgs.length - 1] = InterviewMessage(
         role: last.role,
-        text: last.text + token,
+        text: displayBuffer.toString(),
         hidden: last.hidden,
       );
       state = state.copyWith(messages: msgs, aiThinking: false);
+    }
 
+    final synthQueue = StreamController<String>();
+    _synthQueue = synthQueue;
+    final synthDone = TtsPipeline.run(synthQueue.stream, onChunkReady: revealChunk);
+
+    final rawBuffer = StringBuffer();
+    await for (final token in bridge.chatStream(userMessage: userMessage)) {
+      if (_cancelled) break;
+      if (token.startsWith('\nerror:')) break;
+      rawBuffer.write(token);
       if (!synthQueue.isClosed) synthQueue.add(token);
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
+
+    // Flush if nothing was revealed (very short response / TTS disabled).
+    if (!_cancelled && state.aiThinking) {
+      final msgs = state.messages.toList();
+      if (msgs.isNotEmpty) {
+        final last = msgs.last;
+        msgs[msgs.length - 1] = InterviewMessage(
+          role: last.role,
+          text: rawBuffer.toString(),
+          hidden: last.hidden,
+        );
+        state = state.copyWith(messages: msgs, aiThinking: false);
+      }
+    }
 
     if (!_cancelled) {
       ref.read(audioStateProvider.notifier).state = AudioState.idle;
