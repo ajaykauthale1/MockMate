@@ -155,7 +155,11 @@ String _stripMarkdown(String t) {
   t = t.replaceAll(RegExp(r'<[^>]{1,40}>'),                                   '');
   t = t.replaceAllMapped(
     RegExp(r'`([^`\n]+)`'),
-    (m) => m.group(1)!.replaceAll('_', ' ').replaceAll('-', ' '),
+    // Replace `_` and hyphenated-word separators (my-var → my var) but leave
+    // spaced arithmetic minus (target - num) intact for the code-syntax phase.
+    (m) => m.group(1)!
+        .replaceAll('_', ' ')
+        .replaceAllMapped(RegExp(r'(\w)-(\w)'), (h) => '${h.group(1)} ${h.group(2)}'),
   );
   t = t.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m.group(1)!);
   t = t.replaceAllMapped(RegExp(r'\*{1,3}([^*\n]+)\*{1,3}'), (m) => m.group(1)!);
@@ -188,6 +192,13 @@ String _normalizeCodeSyntax(String t) {
 
   t = t.replaceAllMapped(RegExp(r'(\w+)\+\+'), (m) => '${m.group(1)} plus plus');
   t = t.replaceAllMapped(RegExp(r'(\w+)--'),   (m) => '${m.group(1)} minus minus');
+  // Arithmetic minus: `word - word` → `word minus word`.
+  // Must run before _normalizePunctuation which converts spaced dashes to pauses,
+  // silently dropping the operator (e.g. "target - num" was read as "target num").
+  t = t.replaceAllMapped(
+    RegExp(r'(\w)\s+-\s+(\w)'),
+    (m) => '${m.group(1)} minus ${m.group(2)}',
+  );
   t = t.replaceAll('_', ' ');
   t = t.replaceAllMapped(
     RegExp(r'\b(\w+)\.(\w+)\b'),

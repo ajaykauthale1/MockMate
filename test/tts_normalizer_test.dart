@@ -19,7 +19,10 @@ void main() {
     test('colon → period pause', () => check('result: done', 'result. done.'));
     test('em-dash → period pause', () => check('left — right', 'left. right.'));
     test('double-dash → period pause', () => check('left -- right', 'left. right.'));
-    test('spaced dash → period pause', () => check('left - right', 'left. right.'));
+    test('arithmetic minus: target - num', () => check('target - num', 'target minus num.'));
+    test('arithmetic minus: target - current', () => check('target - current', 'target minus current.'));
+    test('arithmetic minus in backtick code', () => check('`target - nums[i]`', 'target minus nums of i.'));
+    test('spaced dash between words → minus', () => check('left - right', 'left minus right.'));
     test('number comma not touched', () => check('1,000 items', 'one,000 items.'));
     test('time colon not touched', () => check('at 10:30', 'at 10 30.'));
   });
