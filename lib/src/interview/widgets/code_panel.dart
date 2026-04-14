@@ -50,10 +50,10 @@ class _CodePanelState extends ConsumerState<CodePanel> {
     final runtime = state.runtimes[state.language];
 
     final c = context.appColors;
-    // Editor area is always dark regardless of app theme.
-    const editorBg      = Color(0xFF0D0D1A);
-    const editorText    = Color(0xFFEDE8D8); // warm light on dark editor
-    const editorHint    = Color(0x66EDE8D8); // 40% warm light
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final editorBg   = isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF5F4EF);
+    final editorText = isDark ? const Color(0xFFEDE8D8) : c.textPrimary;
+    final editorHint = isDark ? const Color(0x66EDE8D8) : c.textSecondary;
 
     return Container(
       color: c.background,
@@ -96,16 +96,16 @@ class _CodePanelState extends ConsumerState<CodePanel> {
                 expands: true,
                 maxLines: null,
                 minLines: null,
-                style: const TextStyle(
+                style: TextStyle(
                   color: editorText,
                   fontFamily: 'monospace',
                   fontSize: 13,
                   height: 1.55,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                   hintText: '// Start coding…',
                   hintStyle: TextStyle(color: editorHint),
                 ),

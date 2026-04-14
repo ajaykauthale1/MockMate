@@ -128,6 +128,7 @@ class _SkeAppBar extends ConsumerWidget implements PreferredSizeWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2)),
       actions: [
+        const ThemeToggleButton(),
         IconButton(
           icon: Icon(Icons.settings_outlined, color: c.textSecondary),
           tooltip: 'Settings',

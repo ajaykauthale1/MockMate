@@ -30,21 +30,15 @@ const _kMouths = <int, _Mouth>{
 
 _Mouth _mouthFor(int id) => _kMouths[id] ?? _kMouths[0]!;
 
-// Face is always dark purple — features are always drawn in warm light so
-// they remain visible regardless of the app theme.
-const _kFaceBg      = Color(0xFF2A2848);
-const _kFaceRing    = Color(0x3FFFFFFF); // 25% white ring
-const _kFeature     = Color(0xFFEDE8D8); // warm light for eyes/brows/mouth
-const _kMouthCavity = Color(0xCC000000); // near-black mouth interior
-
 // ---------------------------------------------------------------------------
 // AvatarPainter
 // ---------------------------------------------------------------------------
 
 class AvatarPainter extends CustomPainter {
   final int visemeId;
+  final bool isDark;
 
-  const AvatarPainter({required this.visemeId});
+  const AvatarPainter({required this.visemeId, this.isDark = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -52,18 +46,23 @@ class AvatarPainter extends CustomPainter {
     final cy = size.height / 2;
     final r = size.shortestSide / 2 * 0.88;
 
+    // Colors adapt to theme so the face is never visually "black" in light mode.
+    final faceBg   = isDark ? const Color(0xFF2A2848) : const Color(0xFF4E4580);
+    final faceRing = isDark ? const Color(0x3FFFFFFF) : const Color(0x3F26251E);
+    final feature  = isDark ? const Color(0xFFEDE8D8) : const Color(0xFFF7F4FF);
+
     // Face
-    canvas.drawCircle(Offset(cx, cy), r, Paint()..color = _kFaceBg);
+    canvas.drawCircle(Offset(cx, cy), r, Paint()..color = faceBg);
     canvas.drawCircle(
       Offset(cx, cy),
       r,
       Paint()
-        ..color = _kFaceRing
+        ..color = faceRing
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
 
-    final fgPaint = Paint()..color = _kFeature.withValues(alpha: 0.85);
+    final fgPaint = Paint()..color = feature.withValues(alpha: 0.85);
 
     // Eyes
     final eyeY = cy - r * 0.20;
@@ -73,7 +72,7 @@ class AvatarPainter extends CustomPainter {
 
     // Eyebrows
     final browPaint = Paint()
-      ..color = _kFeature.withValues(alpha: 0.55)
+      ..color = feature.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.045
       ..strokeCap = StrokeCap.round;
@@ -98,13 +97,15 @@ class AvatarPainter extends CustomPainter {
     final mW = r * m.width * 2;
     final mH = r * m.openness * 2;
 
+    final feature = isDark ? const Color(0xFFEDE8D8) : const Color(0xFFF7F4FF);
+    final cavity  = isDark ? const Color(0xCC000000) : const Color(0xFF2A2040);
+
     if (mH < r * 0.04) {
-      // Closed line
       canvas.drawLine(
         Offset(cx - mW / 2, my),
         Offset(cx + mW / 2, my),
         Paint()
-          ..color = _kFeature.withValues(alpha: 0.70)
+          ..color = feature.withValues(alpha: 0.70)
           ..style = PaintingStyle.stroke
           ..strokeWidth = r * 0.05
           ..strokeCap = StrokeCap.round,
@@ -118,28 +119,27 @@ class AvatarPainter extends CustomPainter {
         height: mH.clamp(r * 0.08, double.infinity));
 
     if (m.roundLips) {
-      canvas.drawOval(rect, Paint()..color = _kMouthCavity.withValues(alpha: 0.88));
+      canvas.drawOval(rect, Paint()..color = cavity.withValues(alpha: 0.88));
       canvas.drawOval(
           rect,
           Paint()
-            ..color = _kFeature.withValues(alpha: 0.72)
+            ..color = feature.withValues(alpha: 0.72)
             ..style = PaintingStyle.stroke
             ..strokeWidth = r * 0.045);
     } else {
       final rr = RRect.fromRectAndRadius(rect, Radius.circular(r * 0.04));
-      canvas.drawRRect(rr, Paint()..color = _kMouthCavity.withValues(alpha: 0.90));
+      canvas.drawRRect(rr, Paint()..color = cavity.withValues(alpha: 0.90));
       canvas.drawRRect(
           rr,
           Paint()
-            ..color = _kFeature.withValues(alpha: 0.70)
+            ..color = feature.withValues(alpha: 0.70)
             ..style = PaintingStyle.stroke
             ..strokeWidth = r * 0.04);
-      // Teeth divider
       canvas.drawLine(
         Offset(cx - mW / 2 + r * 0.04, my),
         Offset(cx + mW / 2 - r * 0.04, my),
         Paint()
-          ..color = _kFeature.withValues(alpha: 0.35)
+          ..color = feature.withValues(alpha: 0.35)
           ..strokeWidth = r * 0.03
           ..style = PaintingStyle.stroke,
       );
@@ -147,5 +147,6 @@ class AvatarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(AvatarPainter old) => old.visemeId != visemeId;
+  bool shouldRepaint(AvatarPainter old) =>
+      old.visemeId != visemeId || old.isDark != isDark;
 }

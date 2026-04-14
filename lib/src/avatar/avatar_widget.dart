@@ -46,7 +46,10 @@ class AvatarWidget extends ConsumerWidget {
               child: CustomPaint(
                 key: ValueKey(visemeId),
                 size: Size(s * 0.88, s * 0.88),
-                painter: AvatarPainter(visemeId: visemeId),
+                painter: AvatarPainter(
+                  visemeId: visemeId,
+                  isDark: Theme.of(context).brightness == Brightness.dark,
+                ),
               ),
             ),
           ),
