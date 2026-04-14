@@ -242,6 +242,10 @@ $setupMsg
 
     _lastActionTime = DateTime.now();
 
+    final transcript = state.visibleMessages
+        .map((m) => '${m.role.name.toUpperCase()}: ${m.text}')
+        .join('\n');
+
     final fullMessage = '''
 ${_conductor.buildInterviewerPrompt(q)}
 
@@ -249,6 +253,9 @@ CANDIDATE'S CURRENT CODE (${state.language.displayName}):
 ```
 ${state.code}
 ```
+
+CONVERSATION SO FAR:
+$transcript
 
 USER MESSAGE:
 $text
@@ -415,6 +422,8 @@ ${_conductor.buildActiveMonitoringPrompt(
     }
 
     if (!_cancelled) {
+      final visemesJson = await bridge.extractVisemes(pcmBytes: []);
+      ref.read(pendingVisemesProvider.notifier).state = visemesJson;
       ref.read(audioStateProvider.notifier).state = AudioState.idle;
     }
   }

@@ -27,9 +27,6 @@ YOUR GUIDELINES:
 5.  **Post-Solution Analysis**: Once the candidate believes they have a working solution, ask them to walk you through the time and space complexity. Ask about edge cases they might have missed.
 6.  **Conversational Tone**: Speak like a human. Avoid markdown (no asterisks, backticks, etc.). Use clear, simple sentences optimized for text-to-speech.
 7.  **Conciseness**: Keep your turns brief. Let the candidate do most of the talking and coding.
-
-YOUR FIRST TASK:
-Greet the candidate warmly. Introduce yourself as an expert interviewer. Set the expectation that they should think aloud and ask questions. Then, present "${q.title}" in a conversational, simplified way and ask how they'd like to start.
 ''';
 
   String buildOpeningMessage(InterviewQuestion q) {

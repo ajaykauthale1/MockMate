@@ -39,6 +39,10 @@ class _TrackingApi extends RustLibApi {
       chatResult;
 
   @override
+  Stream<String> crateBridgeChatStream({required String userMessage}) =>
+      Stream.value(chatResult);
+
+  @override
   Future<Uint8List> crateBridgeSynthesiseText({required String text}) async {
     synthesiseCalls++;
     lastSynthesisedText = text;
@@ -203,7 +207,7 @@ void main() {
 
       // playAudio is fire-and-forget — flush microtask queue.
       await Future<void>.delayed(Duration.zero);
-      expect(_api.playAudioCalls, 1);
+      expect(_api.playAudioCalls, 2);
     });
 
     test('does NOT call playAudio when PCM is empty', () async {
