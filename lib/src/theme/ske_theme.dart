@@ -68,34 +68,34 @@ class AppColors {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const lightColors = AppColors(
-  background:    Color(0xFFF2F1ED), // warm cream
-  panel:         Color(0xFFE6E5E0), // surface-400
-  panelDark:     Color(0xFFEBEAE5), // surface-300
-  textPrimary:   Color(0xFF26251E), // warm near-black
-  textSecondary: Color(0x8C26251E), // 55% warm brown
-  accent:        Color(0xFFF54E00), // cursor orange
-  accentDim:     Color(0xFFC08532),
-  userBubble:    Color(0xFFEBEAE5),
-  aiBubble:      Color(0xFFF7F7F4), // surface-100
-  mic:           Color(0xFFCF2D56),
-  borderLight:   Color(0x1A26251E), // 10% warm brown
-  borderMedium:  Color(0x3326251E), // 20% warm brown
+  background:    Color(0xFFF8FAFC), // Slate 50
+  panel:         Color(0xFFF1F5F9), // Slate 100
+  panelDark:     Color(0xFFE2E8F0), // Slate 200
+  textPrimary:   Color(0xFF0F172A), // Slate 900
+  textSecondary: Color(0xFF64748B), // Slate 500
+  accent:        Color(0xFF2563EB), // Blue 600
+  accentDim:     Color(0xFF3B82F6), // Blue 500
+  userBubble:    Color(0xFFE2E8F0), // Slate 200
+  aiBubble:      Color(0xFFFFFFFF), // White
+  mic:           Color(0xFFF43F5E), // Rose 500
+  borderLight:   Color(0xFFE2E8F0), // Slate 200
+  borderMedium:  Color(0xFFCBD5E1), // Slate 300
   shadow:        Color(0x0F000000), // 6% black
 );
 
 const darkColors = AppColors(
-  background:    Color(0xFF1C1B2E),
-  panel:         Color(0xFF252440),
-  panelDark:     Color(0xFF18172A),
-  textPrimary:   Color(0xFFEDE8D8),
-  textSecondary: Color(0x8CEDE8D8), // 55% warm light
-  accent:        Color(0xFFF54E00), // same orange
-  accentDim:     Color(0xFFC08532),
-  userBubble:    Color(0xFF2B3A60),
-  aiBubble:      Color(0xFF1E2840),
-  mic:           Color(0xFFCF2D56),
-  borderLight:   Color(0x14FFFFFF), //  8% white
-  borderMedium:  Color(0x26FFFFFF), // 15% white
+  background:    Color(0xFF0F172A), // Slate 900
+  panel:         Color(0xFF1E293B), // Slate 800
+  panelDark:     Color(0xFF0F172A), // Slate 900
+  textPrimary:   Color(0xFFF8FAFC), // Slate 50
+  textSecondary: Color(0xFF94A3B8), // Slate 400
+  accent:        Color(0xFF3B82F6), // Blue 500
+  accentDim:     Color(0xFF60A5FA), // Blue 400
+  userBubble:    Color(0xFF334155), // Slate 700
+  aiBubble:      Color(0xFF1E293B), // Slate 800
+  mic:           Color(0xFFFB7185), // Rose 400
+  borderLight:   Color(0xFF334155), // Slate 700
+  borderMedium:  Color(0xFF475569), // Slate 600
   shadow:        Color(0x1A000000), // 10% black
 );
 
@@ -114,18 +114,18 @@ extension AppColorsX on BuildContext {
 // ─────────────────────────────────────────────────────────────────────────────
 
 abstract final class SkeColors {
-  static const background    = Color(0xFFF2F1ED);
-  static const panel         = Color(0xFFE6E5E0);
-  static const panelDark     = Color(0xFFEBEAE5);
-  static const textPrimary   = Color(0xFF26251E);
-  static const textSecondary = Color(0x8C26251E);
-  static const accent        = Color(0xFFF54E00);
-  static const accentDim     = Color(0xFFC08532);
-  static const userBubble    = Color(0xFFEBEAE5);
-  static const aiBubble      = Color(0xFFF7F7F4);
-  static const mic           = Color(0xFFCF2D56);
-  static const borderLight   = Color(0x1A26251E);
-  static const borderMedium  = Color(0x3326251E);
+  static const background    = Color(0xFFF8FAFC);
+  static const panel         = Color(0xFFF1F5F9);
+  static const panelDark     = Color(0xFFE2E8F0);
+  static const textPrimary   = Color(0xFF0F172A);
+  static const textSecondary = Color(0xFF64748B);
+  static const accent        = Color(0xFF2563EB);
+  static const accentDim     = Color(0xFF3B82F6);
+  static const userBubble    = Color(0xFFE2E8F0);
+  static const aiBubble      = Color(0xFFFFFFFF);
+  static const mic           = Color(0xFFF43F5E);
+  static const borderLight   = Color(0xFFE2E8F0);
+  static const borderMedium  = Color(0xFFCBD5E1);
   static const shadowDark    = borderLight;
   static const shadowLight   = borderMedium;
 }

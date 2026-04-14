@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../bridge/bridge.dart' as bridge;
 import '../services/config_service.dart';
 import '../services/kb_service.dart';
+import '../theme/ske_theme.dart';
 import 'model_catalog.dart';
 import 'ollama_installer.dart';
 
@@ -128,7 +129,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           icon: Icons.error_outline,
           label: 'Ollama not found.',
           loading: false,
-          color: Colors.orange,
+          color: context.appColors.mic,
         ),
         const SizedBox(height: 16),
         const Text('MockMate needs Ollama to run local models.\n'
@@ -211,7 +212,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           icon: Icons.download,
           label: _statusMsg,
           loading: _busy,
-          color: _statusMsg.startsWith('error') ? Colors.red : null,
+          color: _statusMsg.startsWith('error') ? context.appColors.mic : null,
         ),
         if (_pullLog.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -309,7 +310,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             icon: Icons.volume_off,
             label: 'Voice setup failed',
             loading: false,
-            color: Colors.orange,
+            color: context.appColors.mic,
           ),
           const SizedBox(height: 8),
           Text(_voiceError!,

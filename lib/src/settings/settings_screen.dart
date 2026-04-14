@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../bridge/bridge.dart' as bridge;
 import '../theme/ske_theme.dart';
@@ -25,6 +26,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _saving = false;
   String? _statusMsg;
   bool _statusOk = true;
+  bool _isFullScreen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFullScreenState();
+  }
+
+  Future<void> _initFullScreenState() async {
+    final isFull = await windowManager.isFullScreen();
+    if (mounted) {
+      setState(() {
+        _isFullScreen = isFull;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -103,6 +120,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onChanged: (v) {
                       ref.read(themeModeProvider.notifier).state =
                           v ? ThemeMode.dark : ThemeMode.light;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: c.raised(radius: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Full screen',
+                      style: TextStyle(color: c.textPrimary, fontSize: 15)),
+                  Switch(
+                    value: _isFullScreen,
+                    onChanged: (v) async {
+                      await windowManager.setFullScreen(v);
+                      setState(() {
+                        _isFullScreen = v;
+                      });
                     },
                   ),
                 ],
