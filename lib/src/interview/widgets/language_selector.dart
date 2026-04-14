@@ -14,18 +14,19 @@ class LanguageSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: SkeColors.panelDark,
+        color: c.panelDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: SkeColors.shadowLight),
+        border: Border.all(color: c.borderMedium),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<SupportedLanguage>(
           value: value,
-          dropdownColor: SkeColors.panelDark,
-          style: const TextStyle(color: SkeColors.textPrimary, fontSize: 13),
+          dropdownColor: c.panelDark,
+          style: TextStyle(color: c.textPrimary, fontSize: 13),
           isDense: true,
           items: SupportedLanguage.values
               .map((l) => DropdownMenuItem(

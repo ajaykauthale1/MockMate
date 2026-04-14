@@ -221,12 +221,14 @@ class InterviewNotifier extends Notifier<InterviewState> {
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    // Accumulate raw tokens; reveal chunk-by-chunk via onChunkReady.
+    // All raw tokens accumulated.
+    final tokenBuffer = StringBuffer();
+    // Display buffer — grows as tokens are revealed.
     final displayBuffer = StringBuffer();
+    bool firstChunkReady = false;
 
-    void revealChunk(String rawChunk) {
+    void _updateDisplay() {
       if (_cancelled) return;
-      displayBuffer.write(rawChunk);
       final msgs = state.messages.toList();
       if (msgs.isEmpty) return;
       final last = msgs.last;
@@ -238,29 +240,44 @@ class InterviewNotifier extends Notifier<InterviewState> {
       state = state.copyWith(messages: msgs, aiThinking: false);
     }
 
+    void revealChunk(String rawChunk) {
+      if (_cancelled) return;
+      if (!firstChunkReady) {
+        // First audio chunk: flush all pre-buffered tokens at once.
+        firstChunkReady = true;
+        displayBuffer.write(tokenBuffer.toString());
+        _updateDisplay();
+      }
+    }
+
     final synthQueue = StreamController<String>();
     _synthQueue = synthQueue;
     final synthDone = TtsPipeline.run(synthQueue.stream, onChunkReady: revealChunk);
 
-    final rawBuffer = StringBuffer();
     await for (final token in bridge.chatStream(userMessage: userMessage)) {
       if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
-      rawBuffer.write(token);
+      tokenBuffer.write(token);
       if (!synthQueue.isClosed) synthQueue.add(token);
+
+      // Real-time token streaming after first audio chunk.
+      if (firstChunkReady) {
+        displayBuffer.write(token);
+        _updateDisplay();
+      }
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
 
-    // Flush if nothing was revealed (very short response / TTS disabled).
+    // Fallback: TTS never fired (very short response / TTS disabled).
     if (!_cancelled && state.aiThinking) {
       final msgs = state.messages.toList();
       if (msgs.isNotEmpty) {
         final last = msgs.last;
         msgs[msgs.length - 1] = InterviewMessage(
           role: last.role,
-          text: rawBuffer.toString(),
+          text: tokenBuffer.toString(),
           hidden: last.hidden,
         );
         state = state.copyWith(messages: msgs, aiThinking: false);

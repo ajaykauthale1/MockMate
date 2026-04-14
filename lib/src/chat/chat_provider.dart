@@ -72,20 +72,37 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    // All raw tokens accumulated — used as fallback if TTS never fires.
+    // All raw tokens accumulated for fallback and pre-audio buffering.
     final tokenBuffer = StringBuffer();
-    // Display buffer revealed chunk-by-chunk via onChunkReady.
+    // Display buffer — grows as tokens are revealed.
     final displayBuffer = StringBuffer();
+    // Set to true when first audio chunk starts — releases pre-buffered tokens.
+    bool firstChunkReady = false;
 
-    void revealChunk(String rawChunk) {
+    void _updateDisplay() {
       if (_cancelled) return;
-      displayBuffer.write(_stripPhoneticHintsForDisplay(rawChunk));
       final msgs = state.valueOrNull ?? [];
       if (msgs.isEmpty) return;
       state = AsyncData([
         ...msgs.sublist(0, msgs.length - 1),
-        ChatMessage(role: MessageRole.assistant, text: displayBuffer.toString(), thinking: false),
+        ChatMessage(
+          role: MessageRole.assistant,
+          text: displayBuffer.toString(),
+          thinking: false,
+        ),
       ]);
+    }
+
+    void revealChunk(String rawChunk) {
+      if (_cancelled) return;
+      if (!firstChunkReady) {
+        // First audio chunk ready: flush all pre-buffered tokens to display.
+        firstChunkReady = true;
+        displayBuffer.write(
+            _stripPhoneticHintsForDisplay(tokenBuffer.toString()));
+        _updateDisplay();
+      }
+      // Subsequent chunk boundaries are transparent — tokens stream in real-time.
     }
 
     final synthQueue = StreamController<String>();
@@ -96,8 +113,13 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
       if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
       tokenBuffer.write(token);
-      // Feed raw token to TTS pipeline only — display is gated on onChunkReady.
       if (!synthQueue.isClosed) synthQueue.add(token);
+
+      // Once first audio chunk is ready, reveal tokens in real-time (typing effect).
+      if (firstChunkReady) {
+        displayBuffer.write(_stripPhoneticHintsForDisplay(token));
+        _updateDisplay();
+      }
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();

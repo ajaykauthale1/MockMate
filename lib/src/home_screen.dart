@@ -9,18 +9,18 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Scaffold(
-      backgroundColor: SkeColors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
-        title: const Text('MockMate',
+        title: Text('MockMate',
             style: TextStyle(
-                color: SkeColors.accent,
+                color: c.accent,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: SkeColors.textSecondary),
+            icon: Icon(Icons.settings_outlined, color: c.textSecondary),
             tooltip: 'Settings',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -36,19 +36,18 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'What would you like to do?',
                   style: TextStyle(
-                    color: SkeColors.textPrimary,
+                    color: c.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Practice with your knowledge base or take a coding challenge.',
-                  style: TextStyle(
-                      color: SkeColors.textSecondary, fontSize: 13),
+                  style: TextStyle(color: c.textSecondary, fontSize: 13),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
@@ -104,6 +103,7 @@ class _ModeCardState extends State<_ModeCard> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTapDown: (_) => setState(() => _down = true),
       onTapUp: (_) {
@@ -116,12 +116,12 @@ class _ModeCardState extends State<_ModeCard> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: _down
-            ? skeSunken(radius: 14)
-            : skeRaised(
+            ? c.sunken(radius: 14)
+            : c.raised(
                 radius: 14,
                 color: widget.accent
-                    ? SkeColors.accent.withValues(alpha: 0.08)
-                    : SkeColors.panel,
+                    ? c.accent.withValues(alpha: 0.08)
+                    : c.panel,
               ),
         child: Row(
           children: [
@@ -130,13 +130,13 @@ class _ModeCardState extends State<_ModeCard> {
               height: 48,
               decoration: BoxDecoration(
                 color: widget.accent
-                    ? SkeColors.accent.withValues(alpha: 0.15)
-                    : SkeColors.userBubble,
+                    ? c.accent.withValues(alpha: 0.15)
+                    : c.userBubble,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 widget.icon,
-                color: widget.accent ? SkeColors.accent : SkeColors.textPrimary,
+                color: widget.accent ? c.accent : c.textPrimary,
                 size: 24,
               ),
             ),
@@ -148,9 +148,7 @@ class _ModeCardState extends State<_ModeCard> {
                   Text(
                     widget.title,
                     style: TextStyle(
-                      color: widget.accent
-                          ? SkeColors.accent
-                          : SkeColors.textPrimary,
+                      color: widget.accent ? c.accent : c.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -158,14 +156,12 @@ class _ModeCardState extends State<_ModeCard> {
                   const SizedBox(height: 3),
                   Text(
                     widget.subtitle,
-                    style: const TextStyle(
-                        color: SkeColors.textSecondary, fontSize: 12),
+                    style: TextStyle(color: c.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: SkeColors.textSecondary, size: 20),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
           ],
         ),
       ),

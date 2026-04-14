@@ -80,15 +80,18 @@ String? _debugResourcesDir() {
   return res.existsSync() ? res.path : null;
 }
 
-class MockMateApp extends StatelessWidget {
+class MockMateApp extends ConsumerWidget {
   final bool onboardingDone;
   const MockMateApp({super.key, required this.onboardingDone});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
       title: 'MockMate',
       theme: skeuomorphicTheme(),
+      darkTheme: skeuomorphicDarkTheme(),
+      themeMode: themeMode,
       home: onboardingDone
           ? const HomeScreen()
           : const OnboardingPage(nextPage: HomeScreen()),

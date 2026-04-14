@@ -49,17 +49,22 @@ class _CodePanelState extends ConsumerState<CodePanel> {
 
     final runtime = state.runtimes[state.language];
 
+    final c = context.appColors;
+    // Editor area is always dark regardless of app theme.
+    const editorBg      = Color(0xFF0D0D1A);
+    const editorText    = Color(0xFFEDE8D8); // warm light on dark editor
+    const editorHint    = Color(0x66EDE8D8); // 40% warm light
+
     return Container(
-      color: SkeColors.background,
+      color: c.background,
       child: Column(
         children: [
           // Toolbar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              color: SkeColors.panelDark,
-              border: Border(
-                  bottom: BorderSide(color: SkeColors.shadowDark)),
+            decoration: BoxDecoration(
+              color: c.panelDark,
+              border: Border(bottom: BorderSide(color: c.borderLight)),
             ),
             child: Row(
               children: [
@@ -80,10 +85,10 @@ class _CodePanelState extends ConsumerState<CodePanel> {
               ],
             ),
           ),
-          // Editor
+          // Editor — always dark
           Expanded(
             child: Container(
-              color: const Color(0xFF0D0D1A),
+              color: editorBg,
               child: TextField(
                 controller: _ctrl,
                 onChanged: locked ? null : notifier.setCode,
@@ -92,7 +97,7 @@ class _CodePanelState extends ConsumerState<CodePanel> {
                 maxLines: null,
                 minLines: null,
                 style: const TextStyle(
-                  color: SkeColors.textPrimary,
+                  color: editorText,
                   fontFamily: 'monospace',
                   fontSize: 13,
                   height: 1.55,
@@ -102,7 +107,7 @@ class _CodePanelState extends ConsumerState<CodePanel> {
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   hintText: '// Start coding…',
-                  hintStyle: TextStyle(color: SkeColors.shadowLight),
+                  hintStyle: TextStyle(color: editorHint),
                 ),
               ),
             ),

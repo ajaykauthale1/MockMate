@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge/bridge.dart' as bridge;
 import '../theme/ske_theme.dart';
@@ -7,14 +8,14 @@ import '../theme/ske_theme.dart';
 enum _Provider { ollama, openai, anthropic }
 
 /// Settings screen for switching the LLM provider and entering BYOK keys.
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   _Provider _provider = _Provider.ollama;
   final _keyCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
@@ -54,7 +55,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     switch (_provider) {
       case _Provider.ollama:
-        // Ollama is local; no key needed — just confirm health.
         final ok = await bridge.ollamaHealthCheck();
         _setStatus(ok ? 'Ollama active.' : 'Ollama not reachable.', ok: ok);
       case _Provider.openai:
@@ -72,20 +72,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: SkeColors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
-        backgroundColor: SkeColors.panelDark,
-        title: const Text('Settings', style: TextStyle(color: SkeColors.textPrimary)),
-        iconTheme: const IconThemeData(color: SkeColors.textPrimary),
+        backgroundColor: c.panelDark,
+        title: Text('Settings', style: TextStyle(color: c.textPrimary)),
+        iconTheme: IconThemeData(color: c.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Provider selector ──────────────────────────────────────────────
-            _SectionLabel('LLM Provider'),
+            // ── Theme toggle ───────────────────────────────────────────────
+            _SectionLabel('Appearance', c: c),
+            const SizedBox(height: 8),
+            Container(
+              decoration: c.raised(radius: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Dark mode',
+                      style: TextStyle(color: c.textPrimary, fontSize: 15)),
+                  Switch(
+                    value: isDark,
+                    onChanged: (v) {
+                      ref.read(themeModeProvider.notifier).state =
+                          v ? ThemeMode.dark : ThemeMode.light;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Provider selector ──────────────────────────────────────────
+            _SectionLabel('LLM Provider', c: c),
             const SizedBox(height: 8),
             _ProviderSelector(
               value: _provider,
@@ -96,17 +122,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── BYOK fields ───��────────────────────────────────────────────────
+            // ── BYOK fields ────────────────────────────────────────────────
             if (_provider != _Provider.ollama) ...[
-              _SectionLabel('API Key'),
+              _SectionLabel('API Key', c: c),
               const SizedBox(height: 8),
-              _SkeTextField(
-                controller: _keyCtrl,
-                hint: 'sk-...',
-                obscure: true,
-              ),
+              _SkeTextField(controller: _keyCtrl, hint: 'sk-...', obscure: true),
               const SizedBox(height: 16),
-              _SectionLabel('Model (optional)'),
+              _SectionLabel('Model (optional)', c: c),
               const SizedBox(height: 8),
               _SkeTextField(
                 controller: _modelCtrl,
@@ -116,28 +138,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               if (_provider == _Provider.openai) ...[
                 const SizedBox(height: 16),
-                _SectionLabel('Base URL (optional)'),
+                _SectionLabel('Base URL (optional)', c: c),
                 const SizedBox(height: 8),
                 _SkeTextField(
-                  controller: _baseUrlCtrl,
-                  hint: 'https://api.openai.com',
-                ),
+                    controller: _baseUrlCtrl,
+                    hint: 'https://api.openai.com'),
               ],
               const SizedBox(height: 16),
-              _ValidateButton(
-                loading: _validating,
-                onPressed: _validate,
-              ),
+              _ValidateButton(loading: _validating, onPressed: _validate),
               const SizedBox(height: 24),
             ],
 
-            // ── Apply button ───────────────────────────────────────────────────
-            _ApplyButton(
-              loading: _saving,
-              onPressed: _apply,
-            ),
+            // ── Apply button ───────────────────────────────────────────────
+            _ApplyButton(loading: _saving, onPressed: _apply),
 
-            // ── Status message ─────────────────────────────────────────────────
+            // ── Status message ─────────────────────────────────────────────
             if (_statusMsg != null) ...[
               const SizedBox(height: 16),
               _StatusBanner(message: _statusMsg!, ok: _statusOk),
@@ -150,18 +165,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Small helper widgets
+// Helper widgets
 // ---------------------------------------------------------------------------
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  final AppColors c;
+  const _SectionLabel(this.text, {required this.c});
 
   @override
   Widget build(BuildContext context) => Text(
         text,
-        style: const TextStyle(
-          color: SkeColors.textSecondary,
+        style: TextStyle(
+          color: c.textSecondary,
           fontSize: 12,
           letterSpacing: 1.2,
         ),
@@ -175,14 +191,15 @@ class _ProviderSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
-      decoration: skeRaised(radius: 10),
+      decoration: c.raised(radius: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<_Provider>(
           value: value,
-          dropdownColor: SkeColors.panel,
-          style: const TextStyle(color: SkeColors.textPrimary, fontSize: 15),
+          dropdownColor: c.panel,
+          style: TextStyle(color: c.textPrimary, fontSize: 15),
           isExpanded: true,
           onChanged: (p) { if (p != null) onChanged(p); },
           items: const [
@@ -208,17 +225,19 @@ class _SkeTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
-      decoration: skeSunken(radius: 10),
+      decoration: c.sunken(radius: 10),
       child: TextField(
         controller: controller,
         obscureText: obscure,
-        style: const TextStyle(color: SkeColors.textPrimary, fontSize: 14),
+        style: TextStyle(color: c.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: SkeColors.textSecondary, fontSize: 14),
+          hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
     );
@@ -232,14 +251,18 @@ class _ValidateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return OutlinedButton(
       onPressed: loading ? null : onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: SkeColors.accent,
-        side: const BorderSide(color: SkeColors.accentDim),
+        foregroundColor: c.accent,
+        side: BorderSide(color: c.accentDim),
       ),
       child: loading
-          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2))
           : const Text('Validate Key'),
     );
   }
@@ -252,19 +275,27 @@ class _ApplyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: SkeColors.accent,
-          foregroundColor: SkeColors.background,
+          backgroundColor: c.accent,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: loading
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: SkeColors.background))
-            : const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Text('Apply',
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       ),
     );
   }
@@ -277,20 +308,17 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = ok ? Colors.greenAccent.withValues(alpha: 0.15) : SkeColors.mic.withValues(alpha: 0.15);
-    final border = ok ? Colors.greenAccent : SkeColors.mic;
+    final c = context.appColors;
+    final color = ok ? Colors.greenAccent : c.mic;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color,
-        border: Border.all(color: border.withValues(alpha: 0.5)),
+        color: color.withValues(alpha: 0.15),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        message,
-        style: TextStyle(color: ok ? Colors.greenAccent : SkeColors.mic, fontSize: 13),
-      ),
+      child: Text(message, style: TextStyle(color: color, fontSize: 13)),
     );
   }
 }
