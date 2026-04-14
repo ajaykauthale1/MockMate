@@ -122,6 +122,7 @@ class InterviewNotifier extends Notifier<InterviewState> {
   Timer? _ticker;
   bool _cancelled = false;
   StreamController<String>? _synthQueue;
+  StreamController<({String text, int msPerChar})>? _typingQueue;
 
   @override
   InterviewState build() {
@@ -213,40 +214,72 @@ class InterviewNotifier extends Notifier<InterviewState> {
   /// Stream LLM tokens, pipe through TtsPipeline, and reveal text in sync
   /// with audio — text becomes visible only when the first audio chunk plays.
   Future<void> _streamAndSpeak(String userMessage) async {
-    // Cancel any in-flight TTS/LLM.
+    // Cancel any in-flight TTS/LLM/typing.
     _cancelled = true;
     await _synthQueue?.close();
+    _typingQueue?.close();
     await bridge.stopAudio();
     _cancelled = false;
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    // All raw tokens accumulated.
+    // All raw tokens accumulated for the TTS-never-fired fallback.
     final tokenBuffer = StringBuffer();
-    // Display buffer — grows as tokens are revealed.
+    // Text already committed to screen (no cursor).
     final displayBuffer = StringBuffer();
+    var lastQueued = ''; // last char enqueued to typing stream (separator tracking)
     bool firstChunkReady = false;
 
-    void _updateDisplay() {
+    void _updateDisplay({bool cursor = false}) {
       if (_cancelled) return;
       final msgs = state.messages.toList();
       if (msgs.isEmpty) return;
       final last = msgs.last;
       msgs[msgs.length - 1] = InterviewMessage(
         role: last.role,
-        text: displayBuffer.toString(),
+        text: displayBuffer.toString() + (cursor ? '▋' : ''),
         hidden: last.hidden,
       );
       state = state.copyWith(messages: msgs, aiThinking: false);
     }
 
-    void revealChunk(String rawChunk) {
+    // Serial typing consumer: drains jobs one character at a time, each job
+    // at its own speed derived from the audio duration of that chunk.
+    final typingQueue =
+        StreamController<({String text, int msPerChar})>();
+    _typingQueue = typingQueue;
+
+    final typingDone = () async {
+      await for (final job in typingQueue.stream) {
+        for (int i = 0; i < job.text.length; i++) {
+          if (_cancelled) return;
+          displayBuffer.write(job.text[i]);
+          _updateDisplay(cursor: true);
+          await Future.delayed(Duration(milliseconds: job.msPerChar));
+        }
+      }
+      if (!_cancelled) _updateDisplay(cursor: false);
+    }();
+
+    void revealChunk(String rawChunk, Duration audioDuration) {
       if (_cancelled) return;
-      if (!firstChunkReady) {
-        // First audio chunk: flush all pre-buffered tokens at once.
-        firstChunkReady = true;
-        displayBuffer.write(tokenBuffer.toString());
-        _updateDisplay();
+      if (!firstChunkReady) firstChunkReady = true;
+      if (rawChunk.isEmpty) return;
+
+      // Separator space between chunks (skip after newline).
+      final sep = (lastQueued.isNotEmpty && lastQueued != '\n' &&
+              !rawChunk.startsWith('\n'))
+          ? ' '
+          : '';
+      final toType = sep + rawChunk;
+      lastQueued = rawChunk[rawChunk.length - 1];
+
+      final msPerChar = audioDuration.inMilliseconds > 0
+          ? (audioDuration.inMilliseconds / toType.length).round().clamp(10, 120)
+          : 25;
+
+      if (!typingQueue.isClosed) {
+        typingQueue.add((text: toType, msPerChar: msPerChar));
       }
     }
 
@@ -259,16 +292,14 @@ class InterviewNotifier extends Notifier<InterviewState> {
       if (token.startsWith('\nerror:')) break;
       tokenBuffer.write(token);
       if (!synthQueue.isClosed) synthQueue.add(token);
-
-      // Real-time token streaming after first audio chunk.
-      if (firstChunkReady) {
-        displayBuffer.write(token);
-        _updateDisplay();
-      }
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
+
+    // Close typing queue and wait for animation to finish.
+    if (!typingQueue.isClosed) await typingQueue.close();
+    await typingDone;
 
     // Fallback: TTS never fired (very short response / TTS disabled).
     if (!_cancelled && state.aiThinking) {

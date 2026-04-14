@@ -42,21 +42,24 @@ class ChatMessage {
 class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
   bool _cancelled = false;
   StreamController<String>? _synthQueue;
+  StreamController<({String text, int msPerChar})>? _typingQueue;
 
   @override
   Future<List<ChatMessage>> build() async {
     ref.onDispose(() {
       _cancelled = true;
       _synthQueue?.close();
+      _typingQueue?.close();
       bridge.stopAudio();
     });
     return [];
   }
 
   Future<void> send(String userText) async {
-    // Cancel any in-flight TTS/LLM.
+    // Cancel any in-flight TTS/LLM/typing.
     _cancelled = true;
     await _synthQueue?.close();
+    _typingQueue?.close();
     await bridge.stopAudio();
     _cancelled = false;
 
@@ -72,14 +75,14 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
     ref.read(audioStateProvider.notifier).state = AudioState.speaking;
 
-    // All raw tokens accumulated for fallback and pre-audio buffering.
+    // All raw tokens accumulated for the TTS-never-fired fallback.
     final tokenBuffer = StringBuffer();
-    // Display buffer — grows as tokens are revealed.
+    // Text already committed to screen (no cursor).
     final displayBuffer = StringBuffer();
-    // Set to true when first audio chunk starts — releases pre-buffered tokens.
+    var lastQueued = ''; // last char enqueued to typing stream (separator tracking)
     bool firstChunkReady = false;
 
-    void _updateDisplay() {
+    void _updateDisplay({bool cursor = false}) {
       if (_cancelled) return;
       final msgs = state.valueOrNull ?? [];
       if (msgs.isEmpty) return;
@@ -87,22 +90,52 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
         ...msgs.sublist(0, msgs.length - 1),
         ChatMessage(
           role: MessageRole.assistant,
-          text: displayBuffer.toString(),
+          text: displayBuffer.toString() + (cursor ? '▋' : ''),
           thinking: false,
         ),
       ]);
     }
 
-    void revealChunk(String rawChunk) {
-      if (_cancelled) return;
-      if (!firstChunkReady) {
-        // First audio chunk ready: flush all pre-buffered tokens to display.
-        firstChunkReady = true;
-        displayBuffer.write(
-            _stripPhoneticHintsForDisplay(tokenBuffer.toString()));
-        _updateDisplay();
+    // Serial typing consumer: drains jobs one character at a time, each job
+    // at its own speed derived from the audio duration of that chunk.
+    final typingQueue =
+        StreamController<({String text, int msPerChar})>();
+    _typingQueue = typingQueue;
+
+    final typingDone = () async {
+      await for (final job in typingQueue.stream) {
+        for (int i = 0; i < job.text.length; i++) {
+          if (_cancelled) return;
+          displayBuffer.write(job.text[i]);
+          _updateDisplay(cursor: true);
+          await Future.delayed(Duration(milliseconds: job.msPerChar));
+        }
       }
-      // Subsequent chunk boundaries are transparent — tokens stream in real-time.
+      if (!_cancelled) _updateDisplay(cursor: false);
+    }();
+
+    void revealChunk(String rawChunk, Duration audioDuration) {
+      if (_cancelled) return;
+      if (!firstChunkReady) firstChunkReady = true;
+      final display = _stripPhoneticHintsForDisplay(rawChunk);
+      if (display.isEmpty) return;
+
+      // Separator space between chunks (skip after newline).
+      final sep = (lastQueued.isNotEmpty && lastQueued != '\n' &&
+              !display.startsWith('\n'))
+          ? ' '
+          : '';
+      final toType = sep + display;
+      lastQueued = display[display.length - 1];
+
+      // ms per character = audio duration / char count, clamped to sane range.
+      final msPerChar = audioDuration.inMilliseconds > 0
+          ? (audioDuration.inMilliseconds / toType.length).round().clamp(10, 120)
+          : 25;
+
+      if (!typingQueue.isClosed) {
+        typingQueue.add((text: toType, msPerChar: msPerChar));
+      }
     }
 
     final synthQueue = StreamController<String>();
@@ -114,18 +147,16 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
       if (token.startsWith('\nerror:')) break;
       tokenBuffer.write(token);
       if (!synthQueue.isClosed) synthQueue.add(token);
-
-      // Once first audio chunk is ready, reveal tokens in real-time (typing effect).
-      if (firstChunkReady) {
-        displayBuffer.write(_stripPhoneticHintsForDisplay(token));
-        _updateDisplay();
-      }
     }
 
     if (!synthQueue.isClosed) await synthQueue.close();
     await synthDone;
 
-    // Flush if TTS never fired (very short response / TTS disabled).
+    // Close typing queue and wait for animation to finish.
+    if (!typingQueue.isClosed) await typingQueue.close();
+    await typingDone;
+
+    // Fallback if TTS never fired (very short response / TTS disabled).
     if (!_cancelled) {
       final msgs = state.valueOrNull ?? [];
       if (msgs.isNotEmpty && msgs.last.thinking) {

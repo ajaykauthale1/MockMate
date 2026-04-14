@@ -70,8 +70,9 @@ final _silencePadding = List<int>.filled(1920 * 4, 0);
 final _codeSnippetPadding = List<int>.filled(24000 ~/ 2 * 4, 0);
 
 /// Called with the display text of each chunk the moment its audio starts playing.
-/// Receives the *raw* (pre-clean) chunk so callers can strip phonetic hints themselves.
-typedef OnChunkReady = void Function(String rawChunk);
+/// [rawChunk] is the pre-clean chunk so callers can strip phonetic hints themselves.
+/// [audioDuration] is PCM duration + silence padding — use it to pace typing speed.
+typedef OnChunkReady = void Function(String rawChunk, Duration audioDuration);
 
 Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
   final chunkController = StreamController<String>();
@@ -86,7 +87,7 @@ Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
       debugPrint('[TTS ${_ts()}] chunk_clean : $clean');
       if (clean.isEmpty) {
         // Still notify so display text isn't silently dropped.
-        onChunkReady?.call(chunk);
+        onChunkReady?.call(chunk, Duration.zero);
         continue;
       }
       debugPrint('[TTS ${_ts()}] synth_start');
@@ -95,13 +96,15 @@ Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
       if (pcm.isNotEmpty) {
         debugPrint('[TTS ${_ts()}] enqueue_audio');
         unawaited(bridge.playAudio(pcmBytes: pcm.toList()));
-        // Notify caller — audio is now enqueued, reveal this chunk's text.
-        onChunkReady?.call(chunk);
         // Longer pause after code blocks or colon introductions; normal gap otherwise.
         final padding = (hasCodeBlock || hasTrailingColon) ? _codeSnippetPadding : _silencePadding;
+        final silenceMs = (hasCodeBlock || hasTrailingColon) ? 500 : 80;
+        // Pass full audio duration (PCM + silence) so callers can pace typing speed.
+        final audioMs = (pcm.length / 4 / 24000 * 1000).round() + silenceMs;
+        onChunkReady?.call(chunk, Duration(milliseconds: audioMs));
         unawaited(bridge.playAudio(pcmBytes: padding));
       } else {
-        onChunkReady?.call(chunk);
+        onChunkReady?.call(chunk, Duration.zero);
       }
     }
   }();
@@ -123,7 +126,7 @@ Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
         wordBuf.write(pre.isEmpty ? post : '$pre $post');
         return;
       }
-      if (pre.isNotEmpty) chunkController.add(pre);
+      if (pre.isNotEmpty) chunkController.add('$pre\n\n');
       wordBuf.clear();
       wordBuf.write(post);
       return;
