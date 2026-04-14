@@ -131,6 +131,31 @@ abstract final class SkeColors {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Reusable AppBar theme toggle button
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ThemeToggleButton extends ConsumerWidget {
+  const ThemeToggleButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      icon: Icon(
+        isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+        color: c.textSecondary,
+      ),
+      tooltip: isDark ? 'Light mode' : 'Dark mode',
+      onPressed: () {
+        ref.read(themeModeProvider.notifier).state =
+            isDark ? ThemeMode.light : ThemeMode.dark;
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Free-function shims — kept only for any call sites not yet migrated.
 // Prefer context.appColors.raised() / .sunken() in new code.
 // ─────────────────────────────────────────────────────────────────────────────

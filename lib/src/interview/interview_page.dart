@@ -92,6 +92,7 @@ class _InterviewAppBar extends ConsumerWidget implements PreferredSizeWidget {
             letterSpacing: 1.1),
       ),
       actions: [
+        const ThemeToggleButton(),
         if (active)
           Padding(
             padding: const EdgeInsets.only(right: 8),

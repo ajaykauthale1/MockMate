@@ -19,6 +19,7 @@ class HomeScreen extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2)),
         actions: [
+          const ThemeToggleButton(),
           IconButton(
             icon: Icon(Icons.settings_outlined, color: c.textSecondary),
             tooltip: 'Settings',
