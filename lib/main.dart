@@ -62,7 +62,10 @@ Future<void> _initTts() async {
     final res = _debugResourcesDir();
     if (res != null) {
       if (model.isEmpty  || !File(model).existsSync())  model  = '$res/kokoro/kokoro-v1.0.onnx';
-      if (style.isEmpty  || !File(style).existsSync())  style  = '$res/kokoro/af_heart.bin';
+      if (style.isEmpty  || !File(style).existsSync()) {
+        final adam = '$res/kokoro/am_adam.bin';
+        style = File(adam).existsSync() ? adam : '$res/kokoro/af_heart.bin';
+      }
       if (espeak.isEmpty || !File(espeak).existsSync()) espeak = '$res/espeak-ng/espeak-ng.exe';
     }
   }

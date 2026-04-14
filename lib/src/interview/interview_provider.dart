@@ -228,6 +228,9 @@ $setupMsg
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
+    final q = state.question;
+    if (q == null) return;
+
     state = state.copyWith(
       messages: [
         ...state.messages,
@@ -240,6 +243,8 @@ $setupMsg
     _lastActionTime = DateTime.now();
 
     final fullMessage = '''
+${_conductor.buildInterviewerPrompt(q)}
+
 CANDIDATE'S CURRENT CODE (${state.language.displayName}):
 ```
 ${state.code}
@@ -265,11 +270,15 @@ $text
         .map((m) => '${m.role.name.toUpperCase()}: ${m.text}')
         .toList();
 
-    final monitorPrompt = _conductor.buildActiveMonitoringPrompt(
+    final monitorPrompt = '''
+${_conductor.buildInterviewerPrompt(q)}
+
+${_conductor.buildActiveMonitoringPrompt(
       q: q,
       code: code,
       conversationSummary: transcript,
-    );
+    )}
+''';
 
     _monitoringInProgress = true;
     try {
@@ -365,8 +374,8 @@ $text
       lastQueued = rawChunk[rawChunk.length - 1];
 
       final msPerChar = audioDuration.inMilliseconds > 0
-          ? (audioDuration.inMilliseconds / toType.length).round().clamp(10, 120)
-          : 25;
+          ? (audioDuration.inMilliseconds / toType.length).round().clamp(40, 150)
+          : 40;
 
       if (!typingQueue.isClosed) {
         typingQueue.add((text: toType, msPerChar: msPerChar));
@@ -518,8 +527,10 @@ $text
         .join('\n\n');
 
     return '''
-CODING INTERVIEW QUESTION
-=========================
+${_conductor.buildInterviewerPrompt(q)}
+
+INTERVIEW QUESTION
+==================
 Title: ${q.title}
 Difficulty: ${q.difficulty.name}
 Tags: ${q.tags.join(', ')}

@@ -130,8 +130,8 @@ class ConversationNotifier extends AsyncNotifier<List<ChatMessage>> {
 
       // ms per character = audio duration / char count, clamped to sane range.
       final msPerChar = audioDuration.inMilliseconds > 0
-          ? (audioDuration.inMilliseconds / toType.length).round().clamp(10, 120)
-          : 25;
+          ? (audioDuration.inMilliseconds / toType.length).round().clamp(40, 150)
+          : 40;
 
       if (!typingQueue.isClosed) {
         typingQueue.add((text: toType, msPerChar: msPerChar));

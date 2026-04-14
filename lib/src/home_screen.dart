@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'chat/chat_page.dart';
 import 'interview/interview_page.dart';
 import 'settings/settings_screen.dart';
@@ -12,22 +13,34 @@ class HomeScreen extends StatelessWidget {
     final c = context.appColors;
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        title: Text('MockMate',
-            style: TextStyle(
-                color: c.accent,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2)),
-        actions: [
-          const ThemeToggleButton(),
-          IconButton(
-            icon: Icon(Icons.settings_outlined, color: c.textSecondary),
-            tooltip: 'Settings',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: DragToMoveArea(
+          child: AppBar(
+            title: Text('MockMate',
+                style: TextStyle(
+                    color: c.accent,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2)),
+            actions: [
+              const ThemeToggleButton(),
+              IconButton(
+                icon: Icon(Icons.settings_outlined, color: c.textSecondary),
+                tooltip: 'Settings',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.redAccent),
+                tooltip: 'Close App',
+                onPressed: () => windowManager.close(),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-        ],
+        ),
       ),
       body: Center(
         child: ConstrainedBox(

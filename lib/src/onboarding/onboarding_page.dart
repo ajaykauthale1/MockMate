@@ -283,7 +283,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           final cfg = await ConfigService.load();
           await ConfigService.save(cfg.copyWith(
             kokoroModelPath: '$assetDir/kokoro-v0_19.onnx',
-            kokoroStylePath: '$assetDir/af_heart.bin',
+            kokoroStylePath: '$assetDir/am_adam.bin',
             espeakBinPath: '$espeakDir/${Platform.isWindows ? 'espeak-ng.exe' : 'espeak-ng'}',
           ));
           setState(() { _voiceDone = true; });

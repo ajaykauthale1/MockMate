@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../bridge/bridge.dart' as bridge;
+import '../home_screen.dart';
+import '../onboarding/onboarding_page.dart';
 import '../theme/ske_theme.dart';
 
 /// Supported BYOK LLM providers.
@@ -142,6 +144,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         _isFullScreen = v;
                       });
                     },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: c.raised(radius: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Voice style',
+                          style: TextStyle(color: c.textPrimary, fontSize: 15)),
+                      Text('Switch to professional male voice',
+                          style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => OnboardingPage(nextPage: const HomeScreen()),
+                        ),
+                      );
+                    },
+                    child: const Text('Download Adam'),
                   ),
                 ],
               ),

@@ -135,7 +135,7 @@ Future<void> run(Stream<String> tokens, {OnChunkReady? onChunkReady}) async {
     // Guard: skip if buffer contains a code block (would split it before normalizer strips it).
     if (_colonBoundary.hasMatch(buf) && !buf.contains('```')) {
       final match = _colonBoundary.allMatches(buf).first;
-      final toFlush = buf.substring(0, match.start + 1).trim();
+      final toFlush = buf.substring(0, match.end).trim();
       final remaining = buf.substring(match.end).trimLeft();
       if (toFlush.isNotEmpty) chunkController.add(toFlush);
       wordBuf.clear();

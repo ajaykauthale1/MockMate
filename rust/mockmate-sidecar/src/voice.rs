@@ -30,7 +30,7 @@ const VOICES_BIN_URL: &str =
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin";
 
 /// Voice to extract.
-const VOICE_NAME: &str = "af_heart";
+const VOICE_NAME: &str = "am_adam";
 /// Fallback voice if VOICE_NAME is not found.
 const VOICE_FALLBACK: &str = "af_bella";
 

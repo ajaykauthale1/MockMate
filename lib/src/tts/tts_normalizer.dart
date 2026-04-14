@@ -1,4 +1,4 @@
-/// Text normalisation for espeak-ng / Kokoro TTS.
+ /// Text normalisation for espeak-ng / Kokoro TTS.
 ///
 /// All logic lives here so it can be unit-tested without any Flutter or Rust
 /// dependencies.  [tts_pipeline.dart] simply calls [cleanForTts].
