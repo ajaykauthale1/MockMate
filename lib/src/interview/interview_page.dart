@@ -34,6 +34,7 @@ class _InterviewPageState extends ConsumerState<InterviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final state = ref.watch(interviewProvider);
     final notifier = ref.read(interviewProvider.notifier);
 
@@ -53,7 +54,7 @@ class _InterviewPageState extends ConsumerState<InterviewPage> {
     final q = state.question;
 
     return Scaffold(
-      backgroundColor: SkeColors.background,
+      backgroundColor: c.background,
       appBar: _InterviewAppBar(state: state, notifier: notifier),
       body: q == null
           ? _QuestionPicker(state: state, notifier: notifier)
@@ -70,14 +71,14 @@ class _InterviewAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final InterviewState state;
   final InterviewNotifier notifier;
 
-  const _InterviewAppBar(
-      {required this.state, required this.notifier});
+  const _InterviewAppBar({required this.state, required this.notifier});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.appColors;
     final active = state.sessionState == SessionState.active;
     final submitting = state.sessionState == SessionState.submitting ||
         state.sessionState == SessionState.evaluating;
@@ -85,8 +86,8 @@ class _InterviewAppBar extends ConsumerWidget implements PreferredSizeWidget {
     return AppBar(
       title: Text(
         state.question?.title ?? 'Coding Interview',
-        style: const TextStyle(
-            color: SkeColors.accent,
+        style: TextStyle(
+            color: c.accent,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.1),
       ),
@@ -103,23 +104,22 @@ class _InterviewAppBar extends ConsumerWidget implements PreferredSizeWidget {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: submitting
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: SkeColors.accent),
+                        strokeWidth: 2, color: c.accent),
                   )
                 : TextButton(
                     onPressed: notifier.submitCode,
                     style: TextButton.styleFrom(
-                      backgroundColor:
-                          SkeColors.accent.withValues(alpha: 0.15),
+                      backgroundColor: c.accent.withValues(alpha: 0.15),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text('Submit',
+                    child: Text('Submit',
                         style: TextStyle(
-                            color: SkeColors.accent,
+                            color: c.accent,
                             fontWeight: FontWeight.w600)),
                   ),
           ),
@@ -136,14 +136,14 @@ class _QuestionPicker extends StatelessWidget {
   final InterviewState state;
   final InterviewNotifier notifier;
 
-  const _QuestionPicker(
-      {required this.state, required this.notifier});
+  const _QuestionPicker({required this.state, required this.notifier});
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     if (state.questions.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: SkeColors.accent),
+      return Center(
+        child: CircularProgressIndicator(color: c.accent),
       );
     }
 
@@ -156,9 +156,9 @@ class _QuestionPicker extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Select a Question',
+              Text('Select a Question',
                   style: TextStyle(
-                      color: SkeColors.textPrimary,
+                      color: c.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
@@ -182,31 +182,30 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
-        decoration: skeRaised(radius: 10),
+        decoration: c.raised(radius: 10),
         child: Row(
           children: [
             Expanded(
               child: Text(question.title,
-                  style: const TextStyle(
-                      color: SkeColors.textPrimary,
+                  style: TextStyle(
+                      color: c.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: SkeColors.userBubble,
+                color: c.userBubble,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.arrow_forward,
-                  color: SkeColors.accent, size: 16),
+              child: Icon(Icons.arrow_forward, color: c.accent, size: 16),
             ),
           ],
         ),
@@ -231,14 +230,8 @@ class _ThreePanelLayout extends StatelessWidget {
         : Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left: question (300px)
-              SizedBox(
-                width: 300,
-                child: QuestionPanel(question: state.question!),
-              ),
-              // Middle: code editor (flex 3)
+              SizedBox(width: 300, child: QuestionPanel(question: state.question!)),
               const Expanded(flex: 3, child: CodePanel()),
-              // Right: interviewer (flex 2)
               const Expanded(flex: 2, child: InterviewerPanel()),
             ],
           );
@@ -246,7 +239,7 @@ class _ThreePanelLayout extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Start overlay shown after question is selected, before session begins
+// Start overlay
 // ---------------------------------------------------------------------------
 
 class _StartOverlay extends ConsumerWidget {
@@ -255,6 +248,7 @@ class _StartOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.appColors;
     final notifier = ref.read(interviewProvider.notifier);
 
     final durations = [
@@ -273,16 +267,15 @@ class _StartOverlay extends ConsumerWidget {
             children: [
               Text(
                 state.question!.title,
-                style: const TextStyle(
-                    color: SkeColors.textPrimary,
+                style: TextStyle(
+                    color: c.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Choose your time limit and start when ready.',
-                style: TextStyle(
-                    color: SkeColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -303,8 +296,8 @@ class _StartOverlay extends ConsumerWidget {
               const SizedBox(height: 28),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SkeColors.accent,
-                  foregroundColor: SkeColors.panelDark,
+                  backgroundColor: c.accent,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 40, vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -328,27 +321,23 @@ class _DurationChip extends StatelessWidget {
   final VoidCallback onTap;
 
   const _DurationChip(
-      {required this.label,
-      required this.selected,
-      required this.onTap});
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: selected
-            ? skeRaised(
-                radius: 8, color: SkeColors.accent.withValues(alpha: 0.2))
-            : skeSunken(radius: 8),
+            ? c.raised(radius: 8, color: c.accent.withValues(alpha: 0.2))
+            : c.sunken(radius: 8),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? SkeColors.accent : SkeColors.textSecondary,
-            fontWeight:
-                selected ? FontWeight.w600 : FontWeight.normal,
+            color: selected ? c.accent : c.textSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
             fontSize: 13,
           ),
         ),

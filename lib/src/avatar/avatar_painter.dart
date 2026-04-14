@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/ske_theme.dart';
 
 // ---------------------------------------------------------------------------
 // Mouth shape parameters per viseme ID.
@@ -31,6 +30,13 @@ const _kMouths = <int, _Mouth>{
 
 _Mouth _mouthFor(int id) => _kMouths[id] ?? _kMouths[0]!;
 
+// Face is always dark purple — features are always drawn in warm light so
+// they remain visible regardless of the app theme.
+const _kFaceBg      = Color(0xFF2A2848);
+const _kFaceRing    = Color(0x3FFFFFFF); // 25% white ring
+const _kFeature     = Color(0xFFEDE8D8); // warm light for eyes/brows/mouth
+const _kMouthCavity = Color(0xCC000000); // near-black mouth interior
+
 // ---------------------------------------------------------------------------
 // AvatarPainter
 // ---------------------------------------------------------------------------
@@ -47,22 +53,17 @@ class AvatarPainter extends CustomPainter {
     final r = size.shortestSide / 2 * 0.88;
 
     // Face
-    canvas.drawCircle(
-      Offset(cx, cy),
-      r,
-      Paint()..color = const Color(0xFF2A2848),
-    );
+    canvas.drawCircle(Offset(cx, cy), r, Paint()..color = _kFaceBg);
     canvas.drawCircle(
       Offset(cx, cy),
       r,
       Paint()
-        ..color = SkeColors.shadowLight.withValues(alpha: 0.35)
+        ..color = _kFaceRing
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
 
-    final fgPaint = Paint()
-      ..color = SkeColors.textPrimary.withValues(alpha: 0.85);
+    final fgPaint = Paint()..color = _kFeature.withValues(alpha: 0.85);
 
     // Eyes
     final eyeY = cy - r * 0.20;
@@ -72,7 +73,7 @@ class AvatarPainter extends CustomPainter {
 
     // Eyebrows
     final browPaint = Paint()
-      ..color = SkeColors.textPrimary.withValues(alpha: 0.55)
+      ..color = _kFeature.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.045
       ..strokeCap = StrokeCap.round;
@@ -103,7 +104,7 @@ class AvatarPainter extends CustomPainter {
         Offset(cx - mW / 2, my),
         Offset(cx + mW / 2, my),
         Paint()
-          ..color = SkeColors.textPrimary.withValues(alpha: 0.70)
+          ..color = _kFeature.withValues(alpha: 0.70)
           ..style = PaintingStyle.stroke
           ..strokeWidth = r * 0.05
           ..strokeCap = StrokeCap.round,
@@ -117,23 +118,20 @@ class AvatarPainter extends CustomPainter {
         height: mH.clamp(r * 0.08, double.infinity));
 
     if (m.roundLips) {
-      canvas.drawOval(
-          rect, Paint()..color = SkeColors.shadowDark.withValues(alpha: 0.88));
+      canvas.drawOval(rect, Paint()..color = _kMouthCavity.withValues(alpha: 0.88));
       canvas.drawOval(
           rect,
           Paint()
-            ..color = SkeColors.textPrimary.withValues(alpha: 0.72)
+            ..color = _kFeature.withValues(alpha: 0.72)
             ..style = PaintingStyle.stroke
             ..strokeWidth = r * 0.045);
     } else {
-      final rr =
-          RRect.fromRectAndRadius(rect, Radius.circular(r * 0.04));
-      canvas.drawRRect(
-          rr, Paint()..color = SkeColors.shadowDark.withValues(alpha: 0.90));
+      final rr = RRect.fromRectAndRadius(rect, Radius.circular(r * 0.04));
+      canvas.drawRRect(rr, Paint()..color = _kMouthCavity.withValues(alpha: 0.90));
       canvas.drawRRect(
           rr,
           Paint()
-            ..color = SkeColors.textPrimary.withValues(alpha: 0.70)
+            ..color = _kFeature.withValues(alpha: 0.70)
             ..style = PaintingStyle.stroke
             ..strokeWidth = r * 0.04);
       // Teeth divider
@@ -141,7 +139,7 @@ class AvatarPainter extends CustomPainter {
         Offset(cx - mW / 2 + r * 0.04, my),
         Offset(cx + mW / 2 - r * 0.04, my),
         Paint()
-          ..color = SkeColors.textPrimary.withValues(alpha: 0.35)
+          ..color = _kFeature.withValues(alpha: 0.35)
           ..strokeWidth = r * 0.03
           ..style = PaintingStyle.stroke,
       );

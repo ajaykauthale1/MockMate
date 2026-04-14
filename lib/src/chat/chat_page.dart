@@ -49,6 +49,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final isTest = ref.watch(isTestModeProvider);
     final conversation = ref.watch(conversationProvider);
 
@@ -67,8 +68,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                   child: Text('Error: $e',
-                      style: const TextStyle(
-                          color: SkeColors.textSecondary))),
+                      style: TextStyle(color: c.textSecondary))),
               data: (messages) {
                 if (messages.isEmpty) {
                   return Center(
@@ -77,7 +77,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           ? 'Test mode: I\'ll quiz you. Ask me anything.'
                           : 'Guide mode: Ask me anything from your KB.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: SkeColors.textSecondary,
+                            color: c.textSecondary,
                           ),
                       textAlign: TextAlign.center,
                     ),
@@ -120,15 +120,16 @@ class _SkeAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.appColors;
     return AppBar(
-      title: const Text('MockMate',
+      title: Text('MockMate',
           style: TextStyle(
-              color: SkeColors.accent,
+              color: c.accent,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2)),
       actions: [
         IconButton(
-          icon: const Icon(Icons.settings_outlined, color: SkeColors.textSecondary),
+          icon: Icon(Icons.settings_outlined, color: c.textSecondary),
           tooltip: 'Settings',
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -144,7 +145,7 @@ class _SkeAppBar extends ConsumerWidget implements PreferredSizeWidget {
                 style: Theme.of(context)
                     .textTheme
                     .labelMedium
-                    ?.copyWith(color: SkeColors.textSecondary),
+                    ?.copyWith(color: c.textSecondary),
               ),
               const SizedBox(width: 4),
               Switch(
@@ -165,7 +166,7 @@ class _SkeAppBar extends ConsumerWidget implements PreferredSizeWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Message bubble — skeuomorphic
+// Message bubble
 // ---------------------------------------------------------------------------
 
 class _MessageBubble extends StatelessWidget {
@@ -174,6 +175,7 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final isUser = message.role == MessageRole.user;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -183,21 +185,21 @@ class _MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: isUser
-            ? skeRaised(radius: 16, color: SkeColors.userBubble)
-            : skeSunken(radius: 16, color: SkeColors.aiBubble),
+            ? c.raised(radius: 16, color: c.userBubble)
+            : c.sunken(radius: 16, color: c.aiBubble),
         child: message.thinking
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 14,
                 child: CircularProgressIndicator(
-                    strokeWidth: 1.5, color: SkeColors.accent),
+                    strokeWidth: 1.5, color: c.accent),
               )
             : SelectableText(
                 message.text,
                 style: TextStyle(
                   color: isUser
-                      ? SkeColors.textPrimary
-                      : SkeColors.textPrimary.withValues(alpha: 0.90),
+                      ? c.textPrimary
+                      : c.textPrimary.withValues(alpha: 0.90),
                   fontSize: 14,
                 ),
               ),
@@ -207,7 +209,7 @@ class _MessageBubble extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Input bar — skeuomorphic
+// Input bar
 // ---------------------------------------------------------------------------
 
 class _SkeInputBar extends ConsumerWidget {
@@ -223,6 +225,7 @@ class _SkeInputBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.appColors;
     final audioState = ref.watch(audioStateProvider);
 
     return SafeArea(
@@ -230,7 +233,7 @@ class _SkeInputBar extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.fromLTRB(10, 6, 10, 10),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: skeRaised(radius: 20),
+        decoration: c.raised(radius: 20),
         child: Row(
           children: [
             // Mic button
@@ -240,7 +243,7 @@ class _SkeInputBar extends ConsumerWidget {
                   : Icons.mic_none,
               color: audioState == AudioState.listening
                   ? Colors.greenAccent
-                  : SkeColors.textSecondary,
+                  : c.textSecondary,
               pressed: audioState == AudioState.listening,
               onTap: () {
                 final notifier = ref.read(audioStateProvider.notifier);
@@ -253,17 +256,16 @@ class _SkeInputBar extends ConsumerWidget {
             // Text field
             Expanded(
               child: Container(
-                decoration: skeSunken(radius: 14),
+                decoration: c.sunken(radius: 14),
                 child: TextField(
                   controller: controller,
                   onSubmitted: (_) => loading ? null : onSend(),
-                  style: const TextStyle(
-                      color: SkeColors.textPrimary, fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: c.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
                     hintText: 'Ask a question…',
-                    hintStyle: TextStyle(color: SkeColors.textSecondary),
+                    hintStyle: TextStyle(color: c.textSecondary),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                   ),
                   maxLines: null,
@@ -274,16 +276,15 @@ class _SkeInputBar extends ConsumerWidget {
             const SizedBox(width: 6),
             // Send button
             loading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 40,
                     height: 40,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: SkeColors.accent),
+                        strokeWidth: 2, color: c.accent),
                   )
                 : _SkeIconButton(
                     icon: Icons.send,
-                    color: SkeColors.accent,
+                    color: c.accent,
                     pressed: false,
                     onTap: onSend,
                   ),
@@ -295,7 +296,7 @@ class _SkeInputBar extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Skeuomorphic icon button
+// Icon button
 // ---------------------------------------------------------------------------
 
 class _SkeIconButton extends StatefulWidget {
@@ -320,6 +321,7 @@ class _SkeIconButtonState extends State<_SkeIconButton> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final depressed = _down || widget.pressed;
     return GestureDetector(
       onTapDown: (_) => setState(() => _down = true),
@@ -332,8 +334,7 @@ class _SkeIconButtonState extends State<_SkeIconButton> {
         duration: const Duration(milliseconds: 80),
         width: 40,
         height: 40,
-        decoration:
-            depressed ? skeSunken(radius: 20) : skeRaised(radius: 20),
+        decoration: depressed ? c.sunken(radius: 20) : c.raised(radius: 20),
         child: Icon(widget.icon, color: widget.color, size: 20),
       ),
     );

@@ -29,6 +29,7 @@ class AvatarWidget extends ConsumerWidget {
     final audioState = ref.watch(audioStateProvider);
     final s = size;
 
+    final c = context.appColors;
     return SizedBox(
       width: s + 20,
       height: s + 20,
@@ -39,7 +40,7 @@ class AvatarWidget extends ConsumerWidget {
           Container(
             width: s,
             height: s,
-            decoration: skeRaised(radius: s / 2, color: SkeColors.panel),
+            decoration: c.raised(radius: s / 2, color: c.panel),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 80),
               child: CustomPaint(
@@ -70,10 +71,11 @@ class _StateDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final color = switch (audioState) {
-      AudioState.idle => SkeColors.textSecondary,
+      AudioState.idle => c.textSecondary,
       AudioState.listening => Colors.greenAccent,
-      AudioState.speaking => SkeColors.accent,
+      AudioState.speaking => c.accent,
     };
     return Container(
       width: 10,

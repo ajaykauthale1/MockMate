@@ -23,23 +23,21 @@ class SessionTimer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _isExpired
-        ? const Color(0xFFBE3A3A)
-        : _isWarning
-            ? const Color(0xFFBE3A3A)
-            : SkeColors.textSecondary;
+    final c = context.appColors;
+    const warnColor = Color(0xFFBE3A3A);
+    final color = (_isExpired || _isWarning) ? warnColor : c.textSecondary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: _isWarning
-            ? const Color(0xFFBE3A3A).withValues(alpha: 0.12)
-            : SkeColors.panelDark,
+            ? warnColor.withValues(alpha: 0.12)
+            : c.panelDark,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: _isWarning
-              ? const Color(0xFFBE3A3A).withValues(alpha: 0.5)
-              : SkeColors.shadowLight,
+              ? warnColor.withValues(alpha: 0.5)
+              : c.borderMedium,
         ),
       ),
       child: Row(

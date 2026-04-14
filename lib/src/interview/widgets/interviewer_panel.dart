@@ -45,6 +45,7 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final state = ref.watch(interviewProvider);
     final messages = state.visibleMessages;
     final locked = state.sessionState != SessionState.active;
@@ -57,9 +58,9 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
     });
 
     return Container(
-      decoration: const BoxDecoration(
-        color: SkeColors.panel,
-        border: Border(left: BorderSide(color: SkeColors.shadowDark)),
+      decoration: BoxDecoration(
+        color: c.panel,
+        border: Border(left: BorderSide(color: c.borderLight)),
       ),
       child: Column(
         children: [
@@ -68,15 +69,15 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(child: AvatarWidget(size: 100)),
           ),
-          const Divider(color: SkeColors.shadowDark, height: 1),
+          Divider(color: c.borderLight, height: 1),
           // Transcript
           Expanded(
             child: messages.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Waiting for interviewer…',
                       style: TextStyle(
-                          color: SkeColors.textSecondary, fontSize: 12),
+                          color: c.textSecondary, fontSize: 12),
                     ),
                   )
                 : ListView.builder(
@@ -86,23 +87,25 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
                         messages.length + (state.aiThinking ? 1 : 0),
                     itemBuilder: (_, i) {
                       if (state.aiThinking && i == messages.length) {
-                        return const _ThinkingBubble();
+                        return _ThinkingBubble(c: c);
                       }
                       final msg = messages[i];
                       return _Bubble(
                         text: msg.text,
                         isUser: msg.role == MessageRole.user,
+                        c: c,
                       );
                     },
                   ),
           ),
-          const Divider(color: SkeColors.shadowDark, height: 1),
+          Divider(color: c.borderLight, height: 1),
           // Input
           if (!locked)
             _InputBar(
               controller: _ctrl,
               onSend: _send,
               loading: state.aiThinking,
+              c: c,
             ),
         ],
       ),
@@ -113,7 +116,8 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
 class _Bubble extends StatelessWidget {
   final String text;
   final bool isUser;
-  const _Bubble({required this.text, required this.isUser});
+  final AppColors c;
+  const _Bubble({required this.text, required this.isUser, required this.c});
 
   @override
   Widget build(BuildContext context) {
@@ -125,11 +129,11 @@ class _Bubble extends StatelessWidget {
         constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.32),
         decoration: isUser
-            ? skeRaised(radius: 12, color: SkeColors.userBubble)
-            : skeSunken(radius: 12, color: SkeColors.aiBubble),
+            ? c.raised(radius: 12, color: c.userBubble)
+            : c.sunken(radius: 12, color: c.aiBubble),
         child: SelectableText(
           text,
-          style: const TextStyle(color: SkeColors.textPrimary, fontSize: 12),
+          style: TextStyle(color: c.textPrimary, fontSize: 12),
         ),
       ),
     );
@@ -137,19 +141,20 @@ class _Bubble extends StatelessWidget {
 }
 
 class _ThinkingBubble extends StatelessWidget {
-  const _ThinkingBubble();
+  final AppColors c;
+  const _ThinkingBubble({required this.c});
 
   @override
   Widget build(BuildContext context) {
-    return const Align(
+    return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
         child: SizedBox(
           width: 32,
           height: 20,
           child: CircularProgressIndicator(
-              strokeWidth: 1.5, color: SkeColors.accent),
+              strokeWidth: 1.5, color: c.accent),
         ),
       ),
     );
@@ -160,11 +165,13 @@ class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final bool loading;
+  final AppColors c;
 
   const _InputBar({
     required this.controller,
     required this.onSend,
     required this.loading,
+    required this.c,
   });
 
   @override
@@ -175,19 +182,17 @@ class _InputBar extends StatelessWidget {
         children: [
           Expanded(
             child: Container(
-              decoration: skeSunken(radius: 10),
+              decoration: c.sunken(radius: 10),
               child: TextField(
                 controller: controller,
                 onSubmitted: (_) => loading ? null : onSend(),
-                style: const TextStyle(
-                    color: SkeColors.textPrimary, fontSize: 12),
-                decoration: const InputDecoration(
+                style: TextStyle(color: c.textPrimary, fontSize: 12),
+                decoration: InputDecoration(
                   hintText: 'Ask the interviewer…',
-                  hintStyle: TextStyle(
-                      color: SkeColors.textSecondary, fontSize: 12),
+                  hintStyle: TextStyle(color: c.textSecondary, fontSize: 12),
                   border: InputBorder.none,
                   contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.send,
@@ -196,20 +201,19 @@ class _InputBar extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           loading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 32,
                   height: 32,
                   child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: SkeColors.accent),
+                      strokeWidth: 1.5, color: c.accent),
                 )
               : GestureDetector(
                   onTap: onSend,
                   child: Container(
                     width: 32,
                     height: 32,
-                    decoration: skeRaised(radius: 16),
-                    child: const Icon(Icons.send,
-                        color: SkeColors.accent, size: 16),
+                    decoration: c.raised(radius: 16),
+                    child: Icon(Icons.send, color: c.accent, size: 16),
                   ),
                 ),
         ],

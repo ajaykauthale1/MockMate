@@ -15,16 +15,17 @@ class EvaluationReportView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Scaffold(
-      backgroundColor: SkeColors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
-        title: const Text('Evaluation Report',
+        title: Text('Evaluation Report',
             style: TextStyle(
-                color: SkeColors.accent,
+                color: c.accent,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.1)),
         leading: IconButton(
-          icon: const Icon(Icons.close, color: SkeColors.textSecondary),
+          icon: Icon(Icons.close, color: c.textSecondary),
           onPressed: onDone,
         ),
       ),
@@ -42,8 +43,8 @@ class EvaluationReportView extends StatelessWidget {
             Center(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SkeColors.accent,
-                  foregroundColor: SkeColors.panelDark,
+                  backgroundColor: c.accent,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 32, vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -68,6 +69,7 @@ class _RecommendationBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final rec = report.recommendation;
     final positive = rec?.positive ?? false;
     final color =
@@ -95,8 +97,7 @@ class _RecommendationBanner extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '${report.testsPassed}/${report.testsTotal} test cases passed',
-            style: const TextStyle(
-                color: SkeColors.textSecondary, fontSize: 13),
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
         ],
       ),
@@ -111,25 +112,24 @@ class _TestResultsTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (results.isEmpty) return const SizedBox.shrink();
+    final c = context.appColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Test Results',
+        Text('Test Results',
             style: TextStyle(
-                color: SkeColors.textPrimary,
+                color: c.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: SkeColors.panelDark,
+            color: c.panelDark,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
-            children: results
-                .map((r) => _TestRow(result: r))
-                .toList(),
+            children: results.map((r) => _TestRow(result: r)).toList(),
           ),
         ),
       ],
@@ -143,10 +143,11 @@ class _TestRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final color = result.passed
         ? const Color(0xFF3CB371)
         : result.timedOut
-            ? SkeColors.accent
+            ? c.accent
             : const Color(0xFFBE3A3A);
     final status = result.passed
         ? 'PASS'
@@ -167,8 +168,7 @@ class _TestRow extends StatelessWidget {
           SizedBox(
             width: 40,
             child: Text(result.label,
-                style: const TextStyle(
-                    color: SkeColors.textSecondary, fontSize: 12)),
+                style: TextStyle(color: c.textSecondary, fontSize: 12)),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -188,8 +188,7 @@ class _TestRow extends StatelessWidget {
               result.passed
                   ? 'expected: ${result.expected}'
                   : 'expected: ${result.expected}  got: ${result.actual}',
-              style: const TextStyle(
-                  color: SkeColors.textSecondary, fontSize: 11),
+              style: TextStyle(color: c.textSecondary, fontSize: 11),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -205,12 +204,13 @@ class _NarrativeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('AI Feedback',
+        Text('AI Feedback',
             style: TextStyle(
-                color: SkeColors.textPrimary,
+                color: c.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
@@ -218,13 +218,13 @@ class _NarrativeSection extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: SkeColors.panelDark,
+            color: c.panelDark,
             borderRadius: BorderRadius.circular(8),
           ),
           child: SelectableText(
             text,
-            style: const TextStyle(
-                color: SkeColors.textPrimary, fontSize: 13, height: 1.6),
+            style: TextStyle(
+                color: c.textPrimary, fontSize: 13, height: 1.6),
           ),
         ),
       ],
