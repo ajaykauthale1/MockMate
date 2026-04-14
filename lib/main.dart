@@ -27,9 +27,9 @@ Future<void> main() async {
       titleBarStyle: TitleBarStyle.hidden,
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setFullScreen(true);
       await windowManager.show();
       await windowManager.focus();
-      await windowManager.setFullScreen(true);
     });
   }
   await RustLib.init(forceSameCodegenVersion: false);

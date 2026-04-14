@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -124,6 +125,11 @@ class InterviewNotifier extends Notifier<InterviewState> {
   StreamController<String>? _synthQueue;
   StreamController<({String text, int msPerChar})>? _typingQueue;
 
+  // Active Monitoring state
+  DateTime _lastActionTime = DateTime.now();
+  String _lastMonitoringCode = '';
+  bool _monitoringInProgress = false;
+
   @override
   InterviewState build() {
     ref.onDispose(_cleanup);
@@ -159,7 +165,10 @@ class InterviewNotifier extends Notifier<InterviewState> {
     state = state.copyWith(language: lang, code: starter);
   }
 
-  void setCode(String code) => state = state.copyWith(code: code);
+  void setCode(String code) {
+    state = state.copyWith(code: code);
+    _lastActionTime = DateTime.now();
+  }
 
   void setDuration(Duration d) => state = state.copyWith(totalDuration: d);
 
@@ -179,13 +188,23 @@ class InterviewNotifier extends Notifier<InterviewState> {
       aiThinking: true,
     );
 
+    _lastActionTime = DateTime.now();
+    _lastMonitoringCode = state.code;
     _startTicker();
 
-    final setupMsg =
-        '${_conductor.buildInterviewerPrompt(q)}\n\nNow greet the candidate and present the question. Be concise.';
+    final setupMsg = '''
+${_conductor.buildInterviewerPrompt(q)}
+
+Now, start the interview. Greet the candidate warmly and present the question in a conversational way. 
+
+Follow this style exactly:
+"Hi, I'll be your AI interviewer today. Please treat this like a standard interview: think out loud, ask clarifying questions, and talk me through your logic before writing code. Let's start with ${q.title}: ${q.description}. How would you approach solving this?"
+
+Keep it simple and friendly for text-to-speech.
+''';
 
     // Hidden user prompt + empty assistant placeholder; aiThinking stays true
-    // until first audio chunk fires via onChunkReady in _streamAndSpeak.
+    // until first audio chunk fires via onChunkReady in _processAiResponse.
     state = state.copyWith(
       messages: [
         InterviewMessage(role: MessageRole.user, text: setupMsg, hidden: true),
@@ -193,7 +212,17 @@ class InterviewNotifier extends Notifier<InterviewState> {
       ],
     );
 
-    await _streamAndSpeak(setupMsg);
+    final fullMessage = '''
+CANDIDATE'S CURRENT CODE (${state.language.displayName}):
+```
+${state.code}
+```
+
+USER MESSAGE:
+$setupMsg
+''';
+
+    await _processAiResponse(bridge.chatStream(userMessage: fullMessage));
   }
 
   Future<void> sendMessage(String text) async {
@@ -208,12 +237,73 @@ class InterviewNotifier extends Notifier<InterviewState> {
       aiThinking: true,
     );
 
-    await _streamAndSpeak(text);
+    _lastActionTime = DateTime.now();
+
+    final fullMessage = '''
+CANDIDATE'S CURRENT CODE (${state.language.displayName}):
+```
+${state.code}
+```
+
+USER MESSAGE:
+$text
+''';
+
+    await _processAiResponse(bridge.chatStream(userMessage: fullMessage));
+  }
+
+  /// Periodically checks the candidate's progress and provides hints if they are stuck.
+  Future<void> _performActiveMonitoring() async {
+    if (_monitoringInProgress || _cancelled || state.aiThinking) return;
+    if (state.sessionState != SessionState.active) return;
+
+    final q = state.question;
+    if (q == null) return;
+
+    final code = state.code;
+    final transcript = state.visibleMessages
+        .map((m) => '${m.role.name.toUpperCase()}: ${m.text}')
+        .toList();
+
+    final monitorPrompt = _conductor.buildActiveMonitoringPrompt(
+      q: q,
+      code: code,
+      conversationSummary: transcript,
+    );
+
+    _monitoringInProgress = true;
+    try {
+      final response = await bridge.chat(userMessage: monitorPrompt);
+      if (response.trim().toUpperCase() == '[SILENT]' || _cancelled) {
+        _lastMonitoringCode = code;
+        _monitoringInProgress = false;
+        return;
+      }
+
+      // AI decided to speak!
+      state = state.copyWith(
+        messages: [
+          ...state.messages,
+          InterviewMessage(role: MessageRole.assistant, text: ''),
+        ],
+        aiThinking: true,
+      );
+
+      _lastMonitoringCode = code;
+      _lastActionTime = DateTime.now();
+      
+      // Feed the non-streamed response into the streaming processor for TTS and typing
+      await _processAiResponse(Stream.value(response));
+    } catch (e) {
+      debugPrint('[Monitoring] Error: $e');
+    } finally {
+      _monitoringInProgress = false;
+    }
   }
 
   /// Stream LLM tokens, pipe through TtsPipeline, and reveal text in sync
   /// with audio — text becomes visible only when the first audio chunk plays.
-  Future<void> _streamAndSpeak(String userMessage) async {
+  Future<void> _processAiResponse(Stream<String> tokenStream) async {
     // Cancel any in-flight TTS/LLM/typing.
     _cancelled = true;
     await _synthQueue?.close();
@@ -287,7 +377,7 @@ class InterviewNotifier extends Notifier<InterviewState> {
     _synthQueue = synthQueue;
     final synthDone = TtsPipeline.run(synthQueue.stream, onChunkReady: revealChunk);
 
-    await for (final token in bridge.chatStream(userMessage: userMessage)) {
+    await for (final token in tokenStream) {
       if (_cancelled) break;
       if (token.startsWith('\nerror:')) break;
       tokenBuffer.write(token);
@@ -384,8 +474,22 @@ class InterviewNotifier extends Notifier<InterviewState> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       final next = state.elapsed + const Duration(seconds: 1);
       state = state.copyWith(elapsed: next);
-      if (state.timerExpired && state.sessionState == SessionState.active) {
-        submitCode();
+
+      if (state.sessionState == SessionState.active) {
+        if (state.timerExpired) {
+          submitCode();
+        } else {
+          final now = DateTime.now();
+          final secondsSinceLastAction =
+              now.difference(_lastActionTime).inSeconds;
+
+          if (secondsSinceLastAction >= 30) {
+            if (state.code != _lastMonitoringCode ||
+                secondsSinceLastAction >= 60) {
+              _performActiveMonitoring();
+            }
+          }
+        }
       }
     });
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../avatar/avatar_widget.dart';
@@ -83,17 +85,23 @@ class _InterviewerPanelState extends ConsumerState<InterviewerPanel> {
                 : ListView.builder(
                     controller: _scroll,
                     padding: const EdgeInsets.all(10),
-                    itemCount:
-                        messages.length + (state.aiThinking ? 1 : 0),
+                    itemCount: messages.length,
                     itemBuilder: (_, i) {
-                      if (state.aiThinking && i == messages.length) {
-                        return _ThinkingBubble(c: c);
-                      }
                       final msg = messages[i];
+                      final isLast = i == messages.length - 1;
+                      
+                      // If this is the last message, it's from AI, and it's still empty + thinking
+                      if (isLast && msg.role == MessageRole.assistant && msg.text.isEmpty && state.aiThinking) {
+                        final isJoining = messages.length == 1;
+                        return _ThinkingBubble(c: c, label: isJoining ? 'Joining' : 'Thinking');
+                      }
+                      
                       return _Bubble(
                         text: msg.text,
                         isUser: msg.role == MessageRole.user,
                         c: c,
+                        // Show cursor on the last AI message if it's still "thinking" (typing)
+                        showCursor: isLast && msg.role == MessageRole.assistant && state.aiThinking,
                       );
                     },
                   ),
@@ -117,7 +125,14 @@ class _Bubble extends StatelessWidget {
   final String text;
   final bool isUser;
   final AppColors c;
-  const _Bubble({required this.text, required this.isUser, required this.c});
+  final bool showCursor;
+
+  const _Bubble({
+    required this.text,
+    required this.isUser,
+    required this.c,
+    this.showCursor = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -131,9 +146,18 @@ class _Bubble extends StatelessWidget {
         decoration: isUser
             ? c.raised(radius: 12, color: c.userBubble)
             : c.sunken(radius: 12, color: c.aiBubble),
-        child: SelectableText(
-          text,
-          style: TextStyle(color: c.textPrimary, fontSize: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Flexible(
+              child: SelectableText(
+                text,
+                style: TextStyle(color: c.textPrimary, fontSize: 12),
+              ),
+            ),
+            if (showCursor) const _BlinkingCursor(),
+          ],
         ),
       ),
     );
@@ -142,20 +166,111 @@ class _Bubble extends StatelessWidget {
 
 class _ThinkingBubble extends StatelessWidget {
   final AppColors c;
-  const _ThinkingBubble({required this.c});
+  final String label;
+  const _ThinkingBubble({required this.c, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        child: SizedBox(
-          width: 32,
-          height: 20,
-          child: CircularProgressIndicator(
-              strokeWidth: 1.5, color: c.accent),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: c.sunken(radius: 12, color: c.aiBubble),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ThinkingStatus(label: label),
+            const SizedBox(width: 2),
+            const _BlinkingCursor(),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor();
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 8,
+        height: 14,
+        color: c.accent,
+      ),
+    );
+  }
+}
+
+class ThinkingStatus extends StatefulWidget {
+  final String label;
+  const ThinkingStatus({super.key, this.label = 'Thinking'});
+
+  @override
+  State<ThinkingStatus> createState() => _ThinkingStatusState();
+}
+
+class _ThinkingStatusState extends State<ThinkingStatus> {
+  int _dotCount = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (t) {
+      if (mounted) {
+        setState(() {
+          _dotCount = (_dotCount + 1) % 4;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    final dots = '.' * _dotCount;
+    return Text(
+      '${widget.label}$dots',
+      style: TextStyle(
+        color: c.accent,
+        fontSize: 12,
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -200,22 +315,21 @@ class _InputBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          loading
-              ? SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: c.accent),
-                )
-              : GestureDetector(
-                  onTap: onSend,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: c.raised(radius: 16),
-                    child: Icon(Icons.send, color: c.accent, size: 16),
-                  ),
-                ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: ThinkingStatus(label: 'Thinking'),
+            )
+          else
+            GestureDetector(
+              onTap: onSend,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: c.raised(radius: 16),
+                child: Icon(Icons.send, color: c.accent, size: 16),
+              ),
+            ),
         ],
       ),
     );

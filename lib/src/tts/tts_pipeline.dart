@@ -36,26 +36,25 @@ bool _hasOpenHint(String buf) {
 bool _insideCodeFence(String buf) =>
     RegExp(r'```').allMatches(buf).length.isOdd;
 
+/// True when [buf] contains a complete code block.
+bool _hasCompleteCodeBlock(String buf) =>
+    RegExp(r'```[\s\S]*?```').hasMatch(buf);
+
 /// Minimum raw-buffer length before we flush at a sentence boundary.
-///
-/// Prevents standalone micro-chunks like "1." / "2." / "3." from being
-/// synthesised alone — they play in ~1.4 s while the next chunk takes 3 s
-/// to synthesise, causing an audible gap. Merging them with the following
-/// text keeps the audio queue full.
 const _kMinFlushLen = 12;
 
 /// Flush only at natural speech boundaries so Kokoro has full prosodic context.
 bool _shouldFlush(String buf) {
   if (_hasOpenHint(buf)) return false;
   if (_insideCodeFence(buf)) return false;
+  
+  // If we just finished a code block, flush it immediately so the normalizer can strip it.
+  if (_hasCompleteCodeBlock(buf)) return true;
+
   if (buf.contains('\n\n')) return true;          // paragraph break always flushes
   if (buf.length >= 450) return true;             // MAX_TOKENS guard always flushes
-  // If the buffer contains a code block (fence just closed), only paragraph /
-  // overflow may flush it — never split it at a colon or sentence boundary,
-  // otherwise the code block is torn apart before the normalizer can strip it.
-  if (buf.contains('```')) return false;
-  // Only flush at a sentence boundary when the buffer is long enough to
-  // produce audio that outlasts the next synthesis cycle (~1–3 s).
+  
+  // Only flush at a sentence boundary when the buffer is long enough.
   if (buf.trimRight().length >= _kMinFlushLen && _sentenceBoundary.hasMatch(buf)) return true;
   if (_colonBoundary.hasMatch(buf)) return true;   // colon always flushes
   return false;
